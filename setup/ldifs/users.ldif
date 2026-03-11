@@ -1,0 +1,31 @@
+dn: cn=dev,ou=groups,dc=learn,dc=example
+objectClass: groupofnames
+objectClass: top
+description: development team group
+cn: dev
+member: cn=alice,ou=users,dc=learn,dc=example
+member: cn=bob,ou=users,dc=learn,dc=example
+
+dn: cn=ops,ou=groups,dc=learn,dc=example
+objectClass: groupofnames
+objectClass: top
+description: operations team group
+cn: ops
+member: cn=bob,ou=users,dc=learn,dc=example
+
+dn: cn=alice,ou=users,dc=learn,dc=example
+objectClass: person
+objectClass: top
+cn: alice
+sn: alice
+memberOf: cn=dev,ou=groups,dc=learn,dc=example
+userPassword: alicepassword
+
+dn: cn=bob,ou=users,dc=learn,dc=example
+objectClass: person
+objectClass: top
+cn: bob
+sn: bob
+memberOf: cn=dev,ou=groups,dc=learn,dc=example
+memberOf: cn=ops,ou=groups,dc=learn,dc=example
+userPassword: bobpassword

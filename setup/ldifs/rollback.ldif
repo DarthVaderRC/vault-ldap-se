@@ -1,0 +1,2 @@
+dn: cn={{.Username}},ou=users,dc=learn,dc=example
+changetype: delete

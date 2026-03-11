@@ -1,0 +1,7 @@
+dn: cn={{.Username}},ou=users,dc=learn,dc=example
+objectClass: person
+objectClass: top
+cn: {{.Username}}
+sn: {{.Username}}
+memberOf: cn=dev,ou=groups,dc=learn,dc=example
+userPassword: {{.Password}}

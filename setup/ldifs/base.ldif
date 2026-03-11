@@ -1,0 +1,11 @@
+dn: ou=groups,dc=learn,dc=example
+objectClass: organizationalunit
+objectClass: top
+ou: groups
+description: groups of users
+
+dn: ou=users,dc=learn,dc=example
+objectClass: organizationalunit
+objectClass: top
+ou: users
+description: users
