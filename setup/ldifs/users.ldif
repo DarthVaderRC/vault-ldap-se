@@ -29,3 +29,10 @@ sn: bob
 memberOf: cn=dev,ou=groups,dc=learn,dc=example
 memberOf: cn=ops,ou=groups,dc=learn,dc=example
 userPassword: bobpassword
+
+dn: cn=ldapviewer,ou=users,dc=learn,dc=example
+objectClass: person
+objectClass: top
+cn: ldapviewer
+sn: ldapviewer
+userPassword: ldapviewerpassword

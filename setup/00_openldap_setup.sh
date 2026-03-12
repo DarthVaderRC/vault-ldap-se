@@ -7,6 +7,18 @@ LDAP_ORG="learn"
 LDAP_DOMAIN="learn.example"
 LDAP_ADMIN_PASSWORD="2LearnVault"
 LDAP_IMAGE="osixia/openldap:1.4.0"
+PHPLDAPADMIN_LOGIN_DN="cn=ldapviewer,ou=users,dc=learn,dc=example"
+PHPLDAPADMIN_LOGIN_PASSWORD="ldapviewerpassword"
+PHPLDAPADMIN_CONTAINER_NAME="vault-ldap-phpldapadmin"
+PHPLDAPADMIN_IMAGE="osixia/phpldapadmin:latest"
+PHPLDAPADMIN_PORT="${PHPLDAPADMIN_PORT:-6443}"
+START_PHPLDAPADMIN=false
+
+for arg in "$@"; do
+    case "$arg" in
+        --phpldapadmin) START_PHPLDAPADMIN=true ;;
+    esac
+done
 
 echo "=== Setting up OpenLDAP container ==="
 
@@ -50,7 +62,7 @@ docker cp "${SCRIPT_DIR}/ldifs/base.ldif" "${CONTAINER_NAME}:/tmp/base.ldif"
 docker exec "${CONTAINER_NAME}" ldapadd -cxD "cn=admin,dc=learn,dc=example" -w "${LDAP_ADMIN_PASSWORD}" -f /tmp/base.ldif
 
 echo ""
-echo "=== Adding users (alice, bob) ==="
+echo "=== Adding users (alice, bob, ldapviewer) ==="
 docker cp "${SCRIPT_DIR}/ldifs/users.ldif" "${CONTAINER_NAME}:/tmp/users.ldif"
 docker exec "${CONTAINER_NAME}" ldapadd -cxD "cn=admin,dc=learn,dc=example" -w "${LDAP_ADMIN_PASSWORD}" -f /tmp/users.ldif
 
@@ -62,6 +74,39 @@ docker exec "${CONTAINER_NAME}" ldapadd -cxD "cn=admin,dc=learn,dc=example" -w "
 echo ""
 echo "=== Verifying LDAP entries ==="
 docker exec "${CONTAINER_NAME}" ldapsearch -xD "cn=admin,dc=learn,dc=example" -w "${LDAP_ADMIN_PASSWORD}" -b "dc=learn,dc=example" "(objectClass=person)" cn
+
+if [ "$START_PHPLDAPADMIN" = true ]; then
+    echo ""
+    echo "=== Granting phpLDAPadmin browser read access ==="
+    docker exec -i "${CONTAINER_NAME}" ldapmodify -Y EXTERNAL -H ldapi:/// >/dev/null <<EOF
+dn: olcDatabase={1}mdb,cn=config
+changetype: modify
+replace: olcAccess
+olcAccess: {0}to * by dn.exact=gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth manage by * break
+olcAccess: {1}to attrs=userPassword,shadowLastChange by self write by dn="cn=admin,dc=learn,dc=example" write by anonymous auth by * none
+olcAccess: {2}to * by dn="${PHPLDAPADMIN_LOGIN_DN}" read by self read by dn="cn=admin,dc=learn,dc=example" write by * none
+EOF
+    echo "Granted read-only directory access to the phpLDAPadmin browser account."
+
+    echo ""
+    echo "=== Starting phpLDAPadmin ==="
+    docker rm -f "${PHPLDAPADMIN_CONTAINER_NAME}" >/dev/null 2>&1 || true
+    docker run \
+        --name "${PHPLDAPADMIN_CONTAINER_NAME}" \
+        --network "${VAULT_NETWORK}" \
+        --env PHPLDAPADMIN_LDAP_HOSTS="${OPENLDAP_IP}" \
+        -p "${PHPLDAPADMIN_PORT}:443" \
+        --detach \
+        "${PHPLDAPADMIN_IMAGE}"
+    echo "Waiting for phpLDAPadmin to be ready..."
+    sleep 5
+    docker ps -f name="${PHPLDAPADMIN_CONTAINER_NAME}" --format "table {{.Names}}\t{{.Status}}"
+    echo "phpLDAPadmin URL: https://127.0.0.1:${PHPLDAPADMIN_PORT}"
+    echo "The container uses a self-signed certificate, so your browser may show a certificate warning."
+    echo "Use the dedicated browser account because Vault rotates the LDAP admin password during the demo."
+    echo "phpLDAPadmin Login DN: ${PHPLDAPADMIN_LOGIN_DN}"
+    echo "phpLDAPadmin Password: ${PHPLDAPADMIN_LOGIN_PASSWORD}"
+fi
 
 echo ""
 echo "=== OpenLDAP setup complete ==="

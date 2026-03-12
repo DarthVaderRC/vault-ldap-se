@@ -11,6 +11,7 @@ echo "OpenLDAP IP: ${OPENLDAP_IP}"
 echo "=== Enabling LDAP secrets engine ==="
 
 # Disable if already enabled (ignore errors)
+vault lease revoke -force -prefix ldap >/dev/null 2>&1 || true
 vault secrets disable ldap/ 2>/dev/null || true
 
 vault secrets enable ldap

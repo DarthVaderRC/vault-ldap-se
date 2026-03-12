@@ -18,9 +18,16 @@ NC='\033[0m'
 export VAULT_ADDR="${VAULT_ADDR:-http://127.0.0.1:8200}"
 export VAULT_TOKEN="${VAULT_TOKEN:?VAULT_TOKEN must be set}"
 CONTAINER_NAME="vault-ldap-openldap"
+PHPLDAPADMIN_CONTAINER_NAME="vault-ldap-phpldapadmin"
 
 echo -e "${CYAN}=== Vault LDAP Secrets Engine Cleanup ===${NC}"
 echo ""
+
+# Force revoke any dangling LDAP leases so mount disable works even if
+# OpenLDAP has already been removed or credentials were rotated.
+echo -n "  Force revoking LDAP leases... "
+vault lease revoke -force -prefix ldap >/dev/null 2>&1 || true
+echo -e "${GREEN}done${NC}"
 
 # Disable LDAP secrets engine
 echo -n "  Disabling LDAP secrets engine... "
@@ -48,6 +55,14 @@ echo -e "${GREEN}done${NC}"
 # Remove OpenLDAP container
 echo -n "  Removing OpenLDAP container... "
 if docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1; then
+    echo -e "${GREEN}done${NC}"
+else
+    echo -e "${RED}not running${NC}"
+fi
+
+# Remove phpLDAPadmin container
+echo -n "  Removing phpLDAPadmin container... "
+if docker rm -f "${PHPLDAPADMIN_CONTAINER_NAME}" >/dev/null 2>&1; then
     echo -e "${GREEN}done${NC}"
 else
     echo -e "${RED}not running${NC}"

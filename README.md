@@ -32,13 +32,16 @@ vault-ldap-se/
 │   ├── 02_ldap_engine_config.sh         # Enable & configure LDAP engine
 │   ├── ldifs/
 │   │   ├── base.ldif                    # Base OUs (users, groups)
-│   │   ├── users.ldif                   # alice, bob + dev/ops groups
+│   │   ├── users.ldif                   # alice, bob, ldapviewer + dev/ops groups
 │   │   ├── service_accounts.ldif        # svc-checkout-1, svc-checkout-2
-│   │   ├── creation.ldif               # Dynamic role creation template
-│   │   ├── deletion.ldif               # Dynamic role deletion template
-│   │   └── rollback.ldif               # Dynamic role rollback template
+│   │   ├── creation.ldif                # Dynamic role creation template
+│   │   ├── deletion.ldif                # Dynamic role deletion template
+│   │   └── rollback.ldif                # Dynamic role rollback template
 │   └── policies/
 │       └── admin-policy.hcl             # Vault policy for demo operations
+├── assets/
+│   ├── phpldapadmin-demo.png            # Screenshot of phpLDAPadmin browsing the seeded LDAP tree
+│   └── vault-ldap-se-demo-recording.webm # Demo recording embedded in this README
 └── tests/
     ├── conftest.py                      # Fixtures, LDAP helpers, constants
     ├── test_01_setup.py                 # Engine setup & root rotation
@@ -47,9 +50,6 @@ vault-ldap-se/
     ├── test_05_library.py               # Service account check-out
     ├── test_06_hierarchical.py          # Hierarchical path organization
     └── test_07_password_policy.py       # Custom password policies
-│       └── admin-policy.hcl             # Vault policy for demo operations
-└── assets/
-    ├── vault-ldap-se-demo-recording.webM # Fixtures, LDAP helpers, constants
 ```
 
 ---
@@ -89,6 +89,22 @@ pip3 install -r requirements.txt
 #### Video recording of the demo
 <video src="https://github.com/user-attachments/assets/0f3b4990-15e6-4f72-bf2d-e41cabb74a90" controls="controls" style="max-width: 100%;">
 </video>
+
+#### Optional: launch phpLDAPadmin alongside the demo
+
+```bash
+./demo.sh --phpldapadmin --no-cleanup
+```
+
+- Open `https://127.0.0.1:6443/`
+- Your browser will show a certificate warning because the container uses a self-signed cert
+- Log in with:
+  - DN: `cn=ldapviewer,ou=users,dc=learn,dc=example`
+  - Password: `ldapviewerpassword`
+- Use `--no-cleanup` if you want the browser to stay available after the demo ends
+
+![phpLDAPadmin browsing the demo LDAP directory](./assets/phpldapadmin-demo.png)
+
 ### 4. Or run the automated test suite
 
 ```bash
@@ -113,6 +129,9 @@ The demo script (`demo.sh`) walks through all 7 feature areas with colored outpu
 ./demo.sh --auto                 # Non-interactive (runs straight through)
 ./demo.sh --skip-setup           # Skip infrastructure setup (reuse existing)
 ./demo.sh --no-cleanup           # Keep all resources after demo
+./demo.sh --phpldapadmin         # Start phpLDAPadmin for live LDAP browsing
+./demo.sh --phpldapadmin --no-cleanup
+./demo.sh --skip-setup --phpldapadmin  # Reuse existing OpenLDAP and start phpLDAPadmin
 ./demo.sh --auto --no-cleanup    # Quick validation run
 ```
 
@@ -123,8 +142,16 @@ The demo script (`demo.sh`) walks through all 7 feature areas with colored outpu
 | `--auto` | Disables pause prompts — runs all sections continuously |
 | `--skip-setup` | Skips Section 0 (OpenLDAP container creation, LDAP population, engine configuration). Assumes infrastructure is already running. |
 | `--no-cleanup` | Preserves all resources (containers, roles, engine) after the demo finishes. Useful for post-demo exploration. |
+| `--phpldapadmin` | Starts `osixia/phpldapadmin` and prints the browser URL plus dedicated read-only credentials. Works with or without `--skip-setup`. By default it listens on `https://127.0.0.1:6443/` and honors `PHPLDAPADMIN_PORT` if set. |
 
 **Output**: Each section shows the Vault/LDAP commands being executed, their output, and a pass/fail summary table at the end.
+
+### phpLDAPadmin Notes
+
+- The demo uses a dedicated read-only browser account: `cn=ldapviewer,ou=users,dc=learn,dc=example`
+- The browser account is intentionally separate from the LDAP admin user because Vault rotates the admin password during the demo
+- On Docker's default `bridge` network, phpLDAPadmin is configured to connect to OpenLDAP by container IP rather than container name
+- If you use `--no-cleanup`, the seeded users and service accounts remain present in LDAP for post-demo inspection
 
 ---
 
@@ -236,6 +263,7 @@ dc=learn,dc=example
 ├── ou=users
 │   ├── cn=alice          (member of: dev)
 │   ├── cn=bob            (member of: ops)
+│   ├── cn=ldapviewer     (read-only phpLDAPadmin browser account)
 │   ├── cn=svc-checkout-1 (library service account)
 │   └── cn=svc-checkout-2 (library service account)
 └── ou=groups
@@ -262,6 +290,16 @@ docker exec vault-ldap-openldap ldapmodify -Y EXTERNAL -H ldapi:///
 ```
 
 This authenticates via Unix socket credentials (root inside the container) and requires no password.
+
+### phpLDAPadmin Browser Account
+
+The optional phpLDAPadmin flow seeds a dedicated account:
+
+```text
+cn=ldapviewer,ou=users,dc=learn,dc=example
+```
+
+This account is granted read-only ACLs on the LDAP tree so it can browse entries in the UI without depending on the admin bind DN, whose password is rotated by Vault during the demo.
 
 ### Dynamic Credential LDIF Templates
 
@@ -292,9 +330,12 @@ The `sys/mounts` path (exact) must be included separately from `sys/mounts/*` (w
 
 This removes:
 - OpenLDAP Docker container (`vault-ldap-openldap`)
+- phpLDAPadmin Docker container (`vault-ldap-phpldapadmin`)
 - LDAP secrets engine (`ldap/`)
 - Vault policies (`ldap-admin`)
 - Password policies created during the demo
+
+Before disabling the LDAP secrets engine, `cleanup.sh` force-revokes outstanding `ldap/*` leases. This makes cleanup reliable even when there are dangling dynamic or library leases and the OpenLDAP backend has already been removed.
 
 ---
 
