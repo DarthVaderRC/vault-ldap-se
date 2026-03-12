@@ -149,15 +149,15 @@ pause
 ###############################################################################
 # SECTION 0: Infrastructure Setup
 ###############################################################################
+VAULT_NETWORK=$(docker inspect vault-ent --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}' 2>/dev/null || echo "bridge")
+info "Vault container network: ${VAULT_NETWORK}"
+
 if [ "$SKIP_SETUP" = false ]; then
     section "0. Infrastructure Setup"
 
     subsection "Starting OpenLDAP container"
     # Remove existing container if present
     docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
-
-    VAULT_NETWORK=$(docker inspect vault-ent --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}' 2>/dev/null || echo "bridge")
-    info "Vault container network: ${VAULT_NETWORK}"
 
     run_cmd docker run \
         --name "${CONTAINER_NAME}" \
@@ -187,37 +187,6 @@ if [ "$SKIP_SETUP" = false ]; then
     run_cmd docker exec "${CONTAINER_NAME}" ldapadd -cxD '"cn=admin,dc=learn,dc=example"' -w "${LDAP_ADMIN_PASSWORD}" -f /tmp/users.ldif
     run_cmd docker exec "${CONTAINER_NAME}" ldapadd -cxD '"cn=admin,dc=learn,dc=example"' -w "${LDAP_ADMIN_PASSWORD}" -f /tmp/service_accounts.ldif
 
-    if [ "$START_PHPLDAPADMIN" = true ]; then
-        subsection "Grant phpLDAPadmin browser read access"
-        docker exec -i "${CONTAINER_NAME}" ldapmodify -Y EXTERNAL -H ldapi:/// >/dev/null <<EOF
-dn: olcDatabase={1}mdb,cn=config
-changetype: modify
-replace: olcAccess
-olcAccess: {0}to * by dn.exact=gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth manage by * break
-olcAccess: {1}to attrs=userPassword,shadowLastChange by self write by dn="cn=admin,dc=learn,dc=example" write by anonymous auth by * none
-olcAccess: {2}to * by dn="${PHPLDAPADMIN_LOGIN_DN}" read by self read by dn="cn=admin,dc=learn,dc=example" write by * none
-EOF
-        success "Granted read-only directory access to the phpLDAPadmin browser account."
-
-        subsection "Starting phpLDAPadmin"
-        docker rm -f "${PHPLDAPADMIN_CONTAINER_NAME}" >/dev/null 2>&1 || true
-        run_cmd docker run \
-            --name "${PHPLDAPADMIN_CONTAINER_NAME}" \
-            --network "${VAULT_NETWORK}" \
-            --env PHPLDAPADMIN_LDAP_HOSTS="${OPENLDAP_IP}" \
-            -p "${PHPLDAPADMIN_PORT}:443" \
-            --detach \
-            "${PHPLDAPADMIN_IMAGE}"
-        info "Waiting for phpLDAPadmin to be ready..."
-        sleep 5
-        run_cmd docker ps -f name="${PHPLDAPADMIN_CONTAINER_NAME}" --format '"table {{.Names}}\t{{.Status}}"'
-        success "phpLDAPadmin is available at https://127.0.0.1:${PHPLDAPADMIN_PORT}"
-        warn "The container uses a self-signed certificate, so your browser may show a certificate warning."
-        info "Use the dedicated browser account because Vault rotates the LDAP admin password during the demo."
-        info "Login DN: ${PHPLDAPADMIN_LOGIN_DN}"
-        info "Password: ${PHPLDAPADMIN_LOGIN_PASSWORD}"
-    fi
-
     success "LDAP populated with users: alice, bob, ldapviewer, svc-checkout-1, svc-checkout-2"
 
     subsection "Enabling & Configuring Vault LDAP Secrets Engine"
@@ -237,6 +206,37 @@ EOF
 else
     OPENLDAP_IP=$(docker inspect "${CONTAINER_NAME}" --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
     info "Skipping setup. OpenLDAP IP: ${OPENLDAP_IP}"
+fi
+
+if [ "$START_PHPLDAPADMIN" = true ]; then
+    subsection "Grant phpLDAPadmin browser read access"
+    docker exec -i "${CONTAINER_NAME}" ldapmodify -Y EXTERNAL -H ldapi:/// >/dev/null <<EOF
+dn: olcDatabase={1}mdb,cn=config
+changetype: modify
+replace: olcAccess
+olcAccess: {0}to * by dn.exact=gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth manage by * break
+olcAccess: {1}to attrs=userPassword,shadowLastChange by self write by dn="cn=admin,dc=learn,dc=example" write by anonymous auth by * none
+olcAccess: {2}to * by dn="${PHPLDAPADMIN_LOGIN_DN}" read by self read by dn="cn=admin,dc=learn,dc=example" write by * none
+EOF
+    success "Granted read-only directory access to the phpLDAPadmin browser account."
+
+    subsection "Starting phpLDAPadmin"
+    docker rm -f "${PHPLDAPADMIN_CONTAINER_NAME}" >/dev/null 2>&1 || true
+    run_cmd docker run \
+        --name "${PHPLDAPADMIN_CONTAINER_NAME}" \
+        --network "${VAULT_NETWORK}" \
+        --env PHPLDAPADMIN_LDAP_HOSTS="${OPENLDAP_IP}" \
+        -p "${PHPLDAPADMIN_PORT}:443" \
+        --detach \
+        "${PHPLDAPADMIN_IMAGE}"
+    info "Waiting for phpLDAPadmin to be ready..."
+    sleep 5
+    run_cmd docker ps -f name="${PHPLDAPADMIN_CONTAINER_NAME}" --format '"table {{.Names}}\t{{.Status}}"'
+    success "phpLDAPadmin is available at https://127.0.0.1:${PHPLDAPADMIN_PORT}"
+    warn "The container uses a self-signed certificate, so your browser may show a certificate warning."
+    info "Use the dedicated browser account because Vault rotates the LDAP admin password during the demo."
+    info "Login DN: ${PHPLDAPADMIN_LOGIN_DN}"
+    info "Password: ${PHPLDAPADMIN_LOGIN_PASSWORD}"
 fi
 
 ###############################################################################

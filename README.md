@@ -131,6 +131,7 @@ The demo script (`demo.sh`) walks through all 7 feature areas with colored outpu
 ./demo.sh --no-cleanup           # Keep all resources after demo
 ./demo.sh --phpldapadmin         # Start phpLDAPadmin for live LDAP browsing
 ./demo.sh --phpldapadmin --no-cleanup
+./demo.sh --skip-setup --phpldapadmin  # Reuse existing OpenLDAP and start phpLDAPadmin
 ./demo.sh --auto --no-cleanup    # Quick validation run
 ```
 
@@ -141,7 +142,7 @@ The demo script (`demo.sh`) walks through all 7 feature areas with colored outpu
 | `--auto` | Disables pause prompts — runs all sections continuously |
 | `--skip-setup` | Skips Section 0 (OpenLDAP container creation, LDAP population, engine configuration). Assumes infrastructure is already running. |
 | `--no-cleanup` | Preserves all resources (containers, roles, engine) after the demo finishes. Useful for post-demo exploration. |
-| `--phpldapadmin` | Starts `osixia/phpldapadmin` alongside OpenLDAP and prints the browser URL plus dedicated read-only credentials. By default it listens on `https://127.0.0.1:6443/` and honors `PHPLDAPADMIN_PORT` if set. |
+| `--phpldapadmin` | Starts `osixia/phpldapadmin` and prints the browser URL plus dedicated read-only credentials. Works with or without `--skip-setup`. By default it listens on `https://127.0.0.1:6443/` and honors `PHPLDAPADMIN_PORT` if set. |
 
 **Output**: Each section shows the Vault/LDAP commands being executed, their output, and a pass/fail summary table at the end.
 
