@@ -87,7 +87,8 @@ pip3 install -r requirements.txt
 ./demo.sh                    # Interactive — pauses between each section
 ```
 #### Video recording of the demo
-![Vault LDAP SE Demo](https://github.com/user-attachments/assets/0f3b4990-15e6-4f72-bf2d-e41cabb74a90)
+<video src="https://github.com/user-attachments/assets/0f3b4990-15e6-4f72-bf2d-e41cabb74a90" controls="controls" style="max-width: 100%;">
+</video>
 ### 4. Or run the automated test suite
 
 ```bash
