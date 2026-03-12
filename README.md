@@ -47,6 +47,9 @@ vault-ldap-se/
     ├── test_05_library.py               # Service account check-out
     ├── test_06_hierarchical.py          # Hierarchical path organization
     └── test_07_password_policy.py       # Custom password policies
+│       └── admin-policy.hcl             # Vault policy for demo operations
+└── assets/
+    ├── vault-ldap-se-demo-recording.webM # Fixtures, LDAP helpers, constants
 ```
 
 ---
@@ -84,7 +87,7 @@ pip3 install -r requirements.txt
 ./demo.sh                    # Interactive — pauses between each section
 ```
 #### Video recording of the demo
-![Vault LDAP Demo](./assets/vault-ldap-se-demo-recording.gif)
+![Vault LDAP SE Demo](https://github.com/user-attachments/assets/0f3b4990-15e6-4f72-bf2d-e41cabb74a90)
 ### 4. Or run the automated test suite
 
 ```bash
