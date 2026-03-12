@@ -204,6 +204,7 @@ if [ "$SKIP_SETUP" = false ]; then
     track "Infrastructure Setup" "✅ PASS"
     pause
 else
+    VAULT_NETWORK=$(docker inspect vault-ent --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}' 2>/dev/null || echo "bridge")
     OPENLDAP_IP=$(docker inspect "${CONTAINER_NAME}" --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
     info "Skipping setup. OpenLDAP IP: ${OPENLDAP_IP}"
 fi
