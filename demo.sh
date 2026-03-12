@@ -121,7 +121,7 @@ LDAP_USERS_DN="ou=users,dc=learn,dc=example"
 PHPLDAPADMIN_LOGIN_DN="cn=ldapviewer,ou=users,dc=learn,dc=example"
 PHPLDAPADMIN_LOGIN_PASSWORD="ldapviewerpassword"
 PHPLDAPADMIN_CONTAINER_NAME="vault-ldap-phpldapadmin"
-PHPLDAPADMIN_IMAGE="osixia/phpldapadmin:latest"
+PHPLDAPADMIN_IMAGE="osixia/phpldapadmin:0.9.0"
 PHPLDAPADMIN_PORT="${PHPLDAPADMIN_PORT:-6443}"
 
 ###############################################################################
