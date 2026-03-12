@@ -83,7 +83,8 @@ pip3 install -r requirements.txt
 ```bash
 ./demo.sh                    # Interactive — pauses between each section
 ```
-
+#### Video recording of the demo
+<video src="./assets/vault-ldap-se-demo-recording.webm" autoplay loop muted playsinline style="max-width: 100%;"></video>
 ### 4. Or run the automated test suite
 
 ```bash
