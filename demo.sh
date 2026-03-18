@@ -17,11 +17,38 @@
 #   ./demo.sh --skip-setup     # Skip OpenLDAP/Vault setup
 #   ./demo.sh --no-cleanup     # Keep resources after demo
 #   ./demo.sh --phpldapadmin   # Also start phpLDAPadmin at https://127.0.0.1:6443
+#   ./demo.sh --help           # Show usage information
 #   ./demo.sh --auto --no-cleanup
 ###############################################################################
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+print_usage() {
+    cat <<'EOF'
+Usage: ./demo.sh [options]
+
+Interactive customer demo for the Vault LDAP Secrets Engine.
+
+Options:
+  --auto           Run non-interactively with no pause prompts
+  --skip-setup     Reuse existing OpenLDAP/Vault setup and skip infrastructure bootstrap
+  --no-cleanup     Keep containers, roles, and engine state after the demo finishes
+  --phpldapadmin   Start phpLDAPadmin at https://127.0.0.1:6443 for live LDAP browsing
+  -h, --help       Show this help text and exit
+
+Environment:
+  VAULT_ADDR       Vault address (default: http://127.0.0.1:8200)
+  VAULT_TOKEN      Required Vault token used by the demo script
+  PHPLDAPADMIN_PORT Optional override for the phpLDAPadmin HTTPS port (default: 6443)
+
+Examples:
+  ./demo.sh
+  ./demo.sh --auto
+  ./demo.sh --phpldapadmin --no-cleanup
+  ./demo.sh --skip-setup --phpldapadmin
+EOF
+}
 
 # ---------------------------------------------------------------------------
 # CLI flags
@@ -36,6 +63,16 @@ for arg in "$@"; do
         --skip-setup) SKIP_SETUP=true ;;
         --no-cleanup) NO_CLEANUP=true ;;
         --phpldapadmin) START_PHPLDAPADMIN=true ;;
+        -h|--help)
+            print_usage
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: ${arg}" >&2
+            echo "" >&2
+            print_usage >&2
+            exit 1
+            ;;
     esac
 done
 
@@ -114,11 +151,11 @@ track() {
 export VAULT_ADDR="${VAULT_ADDR:-http://127.0.0.1:8200}"
 export VAULT_TOKEN="${VAULT_TOKEN:?VAULT_TOKEN must be set}"
 CONTAINER_NAME="vault-ldap-openldap"
-LDAP_ADMIN_DN="cn=admin,dc=learn,dc=example"
+LDAP_ADMIN_DN="cn=admin,dc=hashicups,dc=local"
 LDAP_ADMIN_PASSWORD="2LearnVault"
-LDAP_DOMAIN="dc=learn,dc=example"
-LDAP_USERS_DN="ou=users,dc=learn,dc=example"
-PHPLDAPADMIN_LOGIN_DN="cn=ldapviewer,ou=users,dc=learn,dc=example"
+LDAP_BASE_DN="dc=hashicups,dc=local"
+LDAP_SERVICE_ACCOUNTS_DN="ou=ServiceAccounts,dc=hashicups,dc=local"
+PHPLDAPADMIN_LOGIN_DN="cn=ldapviewer,ou=ServiceAccounts,dc=hashicups,dc=local"
 PHPLDAPADMIN_LOGIN_PASSWORD="ldapviewerpassword"
 PHPLDAPADMIN_CONTAINER_NAME="vault-ldap-phpldapadmin"
 PHPLDAPADMIN_IMAGE="osixia/phpldapadmin:0.9.0"
@@ -162,8 +199,8 @@ if [ "$SKIP_SETUP" = false ]; then
     run_cmd docker run \
         --name "${CONTAINER_NAME}" \
         --network "${VAULT_NETWORK}" \
-        --env LDAP_ORGANISATION="learn" \
-        --env LDAP_DOMAIN="learn.example" \
+        --env LDAP_ORGANISATION="HashiCups" \
+        --env LDAP_DOMAIN="hashicups.local" \
         --env LDAP_ADMIN_PASSWORD="${LDAP_ADMIN_PASSWORD}" \
         -p 389:389 -p 636:636 \
         --detach \
@@ -180,24 +217,24 @@ if [ "$SKIP_SETUP" = false ]; then
     subsection "Populating LDAP directory"
 
     docker cp "${SCRIPT_DIR}/setup/ldifs/base.ldif" "${CONTAINER_NAME}:/tmp/base.ldif"
-    docker cp "${SCRIPT_DIR}/setup/ldifs/users.ldif" "${CONTAINER_NAME}:/tmp/users.ldif"
-    docker cp "${SCRIPT_DIR}/setup/ldifs/service_accounts.ldif" "${CONTAINER_NAME}:/tmp/service_accounts.ldif"
+    docker cp "${SCRIPT_DIR}/setup/ldifs/seed_entries.ldif" "${CONTAINER_NAME}:/tmp/seed_entries.ldif"
+    docker cp "${SCRIPT_DIR}/setup/ldifs/library_accounts.ldif" "${CONTAINER_NAME}:/tmp/library_accounts.ldif"
 
-    run_cmd docker exec "${CONTAINER_NAME}" ldapadd -cxD '"cn=admin,dc=learn,dc=example"' -w "${LDAP_ADMIN_PASSWORD}" -f /tmp/base.ldif
-    run_cmd docker exec "${CONTAINER_NAME}" ldapadd -cxD '"cn=admin,dc=learn,dc=example"' -w "${LDAP_ADMIN_PASSWORD}" -f /tmp/users.ldif
-    run_cmd docker exec "${CONTAINER_NAME}" ldapadd -cxD '"cn=admin,dc=learn,dc=example"' -w "${LDAP_ADMIN_PASSWORD}" -f /tmp/service_accounts.ldif
+    run_cmd docker exec "${CONTAINER_NAME}" ldapadd -cxD '"cn=admin,dc=hashicups,dc=local"' -w "${LDAP_ADMIN_PASSWORD}" -f /tmp/base.ldif
+    run_cmd docker exec "${CONTAINER_NAME}" ldapadd -cxD '"cn=admin,dc=hashicups,dc=local"' -w "${LDAP_ADMIN_PASSWORD}" -f /tmp/seed_entries.ldif
+    run_cmd docker exec "${CONTAINER_NAME}" ldapadd -cxD '"cn=admin,dc=hashicups,dc=local"' -w "${LDAP_ADMIN_PASSWORD}" -f /tmp/library_accounts.ldif
 
-    success "LDAP populated with users: alice, bob, ldapviewer, svc-checkout-1, svc-checkout-2"
+    success "LDAP populated with service accounts: svc-account-1, svc-account-2, ldapviewer, svc-library-1, svc-library-2"
 
     subsection "Enabling & Configuring Vault LDAP Secrets Engine"
     disable_ldap_mount
     run_cmd vault secrets enable ldap
     run_cmd vault write ldap/config \
-        binddn="cn=admin,dc=learn,dc=example" \
+        binddn="cn=admin,dc=hashicups,dc=local" \
         bindpass="${LDAP_ADMIN_PASSWORD}" \
         url="ldap://${OPENLDAP_IP}" \
         schema="openldap" \
-        userdn="ou=users,dc=learn,dc=example" \
+        userdn="ou=ServiceAccounts,dc=hashicups,dc=local" \
         userattr="cn"
 
     success "LDAP secrets engine configured!"
@@ -216,8 +253,8 @@ dn: olcDatabase={1}mdb,cn=config
 changetype: modify
 replace: olcAccess
 olcAccess: {0}to * by dn.exact=gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth manage by * break
-olcAccess: {1}to attrs=userPassword,shadowLastChange by self write by dn="cn=admin,dc=learn,dc=example" write by anonymous auth by * none
-olcAccess: {2}to * by dn="${PHPLDAPADMIN_LOGIN_DN}" read by self read by dn="cn=admin,dc=learn,dc=example" write by * none
+olcAccess: {1}to attrs=userPassword,shadowLastChange by self write by dn="cn=admin,dc=hashicups,dc=local" write by anonymous auth by * none
+olcAccess: {2}to * by dn="${PHPLDAPADMIN_LOGIN_DN}" read by self read by dn="cn=admin,dc=hashicups,dc=local" write by * none
 EOF
     success "Granted read-only directory access to the phpLDAPadmin browser account."
 
@@ -285,45 +322,45 @@ pause
 # SECTION 2: Static Roles & Credentials
 ###############################################################################
 section "2. Static Roles & Credential Management"
-info "Static roles map to existing LDAP users. Vault auto-rotates their passwords."
+info "Static roles map to existing LDAP service accounts. Vault auto-rotates their passwords."
 echo ""
 
-subsection "Create a static role for 'alice'"
-run_cmd vault write ldap/static-role/alice \
-    dn='"cn=alice,ou=users,dc=learn,dc=example"' \
-    username='"alice"' \
+subsection "Create a static role for 'svc-account-1'"
+run_cmd vault write ldap/static-role/svc-account-1 \
+    dn='"cn=svc-account-1,ou=ServiceAccounts,dc=hashicups,dc=local"' \
+    username='"svc-account-1"' \
     rotation_period='"24h"'
 
 subsection "Read static credentials"
-run_cmd vault read ldap/static-cred/alice
+run_cmd vault read ldap/static-cred/svc-account-1
 
-ALICE_PWD=$(vault read -field=password ldap/static-cred/alice)
-info "Alice's password (managed by Vault): ${ALICE_PWD:0:20}..."
+STATIC_ACCOUNT_1_PWD=$(vault read -field=password ldap/static-cred/svc-account-1)
+info "svc-account-1 password (managed by Vault): ${STATIC_ACCOUNT_1_PWD:0:20}..."
 
 subsection "Verify password works in LDAP"
 run_cmd docker exec "${CONTAINER_NAME}" ldapwhoami \
-    -xD '"cn=alice,ou=users,dc=learn,dc=example"' \
-    -w "${ALICE_PWD}"
-success "Alice can authenticate to LDAP with Vault-managed password!"
+    -xD '"cn=svc-account-1,ou=ServiceAccounts,dc=hashicups,dc=local"' \
+    -w "${STATIC_ACCOUNT_1_PWD}"
+success "svc-account-1 can authenticate to LDAP with a Vault-managed password!"
 
 subsection "Manual password rotation"
-info "Old password: ${ALICE_PWD:0:20}..."
-run_cmd vault write -f ldap/rotate-role/alice
+info "Old password: ${STATIC_ACCOUNT_1_PWD:0:20}..."
+run_cmd vault write -f ldap/rotate-role/svc-account-1
 sleep 2
-NEW_ALICE_PWD=$(vault read -field=password ldap/static-cred/alice)
-info "New password: ${NEW_ALICE_PWD:0:20}..."
+NEW_STATIC_ACCOUNT_1_PWD=$(vault read -field=password ldap/static-cred/svc-account-1)
+info "New password: ${NEW_STATIC_ACCOUNT_1_PWD:0:20}..."
 success "Password rotated! Old password is invalidated."
 
 subsection "Verify new password works"
 run_cmd docker exec "${CONTAINER_NAME}" ldapwhoami \
-    -xD '"cn=alice,ou=users,dc=learn,dc=example"' \
-    -w "${NEW_ALICE_PWD}"
+    -xD '"cn=svc-account-1,ou=ServiceAccounts,dc=hashicups,dc=local"' \
+    -w "${NEW_STATIC_ACCOUNT_1_PWD}"
 
 subsection "List all static roles"
 run_cmd vault list ldap/static-role
 
 # Cleanup
-vault delete ldap/static-role/alice >/dev/null 2>&1
+vault delete ldap/static-role/svc-account-1 >/dev/null 2>&1
 
 track "Static Roles (CRUD)" "✅ PASS"
 track "Static Credential Read & LDAP Verify" "✅ PASS"
@@ -334,7 +371,7 @@ pause
 # SECTION 3: Dynamic Credentials
 ###############################################################################
 section "3. Dynamic Credentials"
-info "Dynamic credentials create short-lived LDAP users on demand using LDIF templates."
+info "Dynamic credentials create short-lived LDAP service accounts on demand using LDIF templates."
 echo ""
 
 subsection "View LDIF templates"
@@ -366,26 +403,26 @@ DYN_PWD=$(echo "${DYN_DATA}" | jq -r '.data.password')
 DYN_DN=$(echo "${DYN_DATA}" | jq -r '.data.distinguished_names[0]')
 LEASE_ID=$(echo "${DYN_DATA}" | jq -r '.lease_id')
 
-info "Dynamic user created: ${DYN_USER}"
+info "Dynamic service account created: ${DYN_USER}"
 
-subsection "Verify dynamic user exists in LDAP"
+subsection "Verify dynamic service account exists in LDAP"
 run_cmd docker exec "${CONTAINER_NAME}" ldapsearch -Y EXTERNAL -H ldapi:/// \
-    -b '"ou=users,dc=learn,dc=example"' '"(cn='"${DYN_USER}"')"' cn
+    -b '"ou=ServiceAccounts,dc=hashicups,dc=local"' '"(cn='"${DYN_USER}"')"' cn
 
 subsection "Verify dynamic credential works"
 run_cmd docker exec "${CONTAINER_NAME}" ldapwhoami \
     -xD '"'"${DYN_DN}"'"' \
     -w '"'"${DYN_PWD}"'"'
-success "Dynamic user can authenticate!"
+success "Dynamic service account can authenticate!"
 
-subsection "Revoke lease → deletes LDAP user"
+subsection "Revoke lease → deletes dynamic service account"
 run_cmd vault lease revoke "${LEASE_ID}"
 sleep 3
-info "Checking if user still exists..."
+info "Checking if the service account still exists..."
 SEARCH_RESULT=$(docker exec "${CONTAINER_NAME}" ldapsearch -Y EXTERNAL -H ldapi:/// \
-    -b "ou=users,dc=learn,dc=example" "(cn=${DYN_USER})" cn 2>&1 | grep "numEntries" || echo "numEntries: 0")
+    -b "ou=ServiceAccounts,dc=hashicups,dc=local" "(cn=${DYN_USER})" cn 2>&1 | grep "numEntries" || echo "numEntries: 0")
 echo -e "    ${SEARCH_RESULT}"
-success "Dynamic user deleted from LDAP after lease revocation!"
+success "Dynamic service account deleted from LDAP after lease revocation!"
 
 subsection "Custom username template"
 run_cmd vault write ldap/role/custom-tpl \
@@ -414,13 +451,13 @@ pause
 # SECTION 4: Service Account Check-Out (Library)
 ###############################################################################
 section "4. Service Account Check-Out (Library)"
-info "Library sets provide a pool of service accounts that users can check out."
+info "Library sets provide a pool of service accounts that applications or operators can check out."
 info "Vault auto-rotates passwords on check-in and enforces lending periods."
 echo ""
 
 subsection "Create a library set"
 run_cmd vault write ldap/library/svc-team \
-    service_account_names='"svc-checkout-1,svc-checkout-2"' \
+    service_account_names='"svc-library-1,svc-library-2"' \
     ttl='"1h"' \
     max_ttl='"2h"' \
     disable_check_in_enforcement=false
@@ -438,7 +475,7 @@ info "Password: ${SVC_PWD:0:20}..."
 
 subsection "Verify checked-out credential"
 run_cmd docker exec "${CONTAINER_NAME}" ldapwhoami \
-    -xD '"cn='"${SVC_ACCOUNT}"',ou=users,dc=learn,dc=example"' \
+    -xD '"cn='"${SVC_ACCOUNT}"',ou=ServiceAccounts,dc=hashicups,dc=local"' \
     -w '"'"${SVC_PWD}"'"'
 success "Service account credential works!"
 
@@ -482,28 +519,28 @@ info "Vault policies can scope access to specific path levels."
 echo ""
 
 subsection "Create hierarchical static roles"
-# Recreate users for fresh state
+# Recreate seeded static service accounts for fresh state
 docker exec -i "${CONTAINER_NAME}" ldapmodify -Y EXTERNAL -H ldapi:/// >/dev/null 2>&1 <<EOF
-dn: cn=alice,ou=users,dc=learn,dc=example
+dn: cn=svc-account-1,ou=ServiceAccounts,dc=hashicups,dc=local
 changetype: modify
 replace: userPassword
-userPassword: alicepassword
+userPassword: svcaccount1password
 EOF
 docker exec -i "${CONTAINER_NAME}" ldapmodify -Y EXTERNAL -H ldapi:/// >/dev/null 2>&1 <<EOF
-dn: cn=bob,ou=users,dc=learn,dc=example
+dn: cn=svc-account-2,ou=ServiceAccounts,dc=hashicups,dc=local
 changetype: modify
 replace: userPassword
-userPassword: bobpassword
+userPassword: svcaccount2password
 EOF
 
 run_cmd vault write ldap/static-role/org/dev \
-    dn='"cn=alice,ou=users,dc=learn,dc=example"' \
-    username='"alice"' rotation_period='"24h"'
+    dn='"cn=svc-account-1,ou=ServiceAccounts,dc=hashicups,dc=local"' \
+    username='"svc-account-1"' rotation_period='"24h"'
 sleep 2
 
 run_cmd vault write ldap/static-role/org/platform/sre \
-    dn='"cn=bob,ou=users,dc=learn,dc=example"' \
-    username='"bob"' rotation_period='"24h"'
+    dn='"cn=svc-account-2,ou=ServiceAccounts,dc=hashicups,dc=local"' \
+    username='"svc-account-2"' rotation_period='"24h"'
 sleep 2
 
 subsection "List roles at top level"
@@ -579,25 +616,25 @@ success "All passwords are 20 chars with lowercase, uppercase, digits, and speci
 
 subsection "Verify policy applies to static roles"
 docker exec -i "${CONTAINER_NAME}" ldapmodify -Y EXTERNAL -H ldapi:/// >/dev/null 2>&1 <<EOF
-dn: cn=alice,ou=users,dc=learn,dc=example
+dn: cn=svc-account-1,ou=ServiceAccounts,dc=hashicups,dc=local
 changetype: modify
 replace: userPassword
-userPassword: alicepassword
+userPassword: svcaccount1password
 EOF
 
-vault write ldap/static-role/alice-policy \
-    dn="cn=alice,ou=users,dc=learn,dc=example" \
-    username="alice" \
+vault write ldap/static-role/svc-account-1-policy \
+    dn="cn=svc-account-1,ou=ServiceAccounts,dc=hashicups,dc=local" \
+    username="svc-account-1" \
     rotation_period="24h" >/dev/null 2>&1
 sleep 2
 
-POLICY_PWD=$(vault read -field=password ldap/static-cred/alice-policy)
+POLICY_PWD=$(vault read -field=password ldap/static-cred/svc-account-1-policy)
 info "Static role password: ${POLICY_PWD}"
 info "Length: ${#POLICY_PWD}"
 success "Password follows custom policy requirements!"
 
 # Cleanup
-vault delete ldap/static-role/alice-policy >/dev/null 2>&1
+vault delete ldap/static-role/svc-account-1-policy >/dev/null 2>&1
 vault write ldap/config password_policy="" >/dev/null 2>&1
 
 track "Custom Password Policies" "✅ PASS"

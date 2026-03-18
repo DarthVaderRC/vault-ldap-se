@@ -1,11 +1,11 @@
-dn: ou=groups,dc=learn,dc=example
+dn: ou=groups,dc=hashicups,dc=local
 objectClass: organizationalunit
 objectClass: top
 ou: groups
-description: groups of users
+description: groups of service accounts
 
-dn: ou=users,dc=learn,dc=example
+dn: ou=ServiceAccounts,dc=hashicups,dc=local
 objectClass: organizationalunit
 objectClass: top
-ou: users
-description: users
+ou: ServiceAccounts
+description: service accounts

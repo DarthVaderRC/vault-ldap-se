@@ -18,11 +18,11 @@ from conftest import (
     LDAP_ADMIN_PASSWORD,
     LDAP_HOST_URL,
     LDAP_URL,
-    LDAP_USERS_DN,
+    LDAP_SERVICE_ACCOUNTS_DN,
     MOUNT_POINT,
     OPENLDAP_IP,
     ldap_bind_check,
-    reset_ldap_user_password,
+    reset_ldap_account_password,
 )
 
 
@@ -42,7 +42,7 @@ class TestLDAPEngineSetup:
         assert data["schema"] == "openldap"
         assert "172.17.0" in data["url"]
         assert data["userattr"] == "cn"
-        assert data["userdn"] == LDAP_USERS_DN
+        assert data["userdn"] == LDAP_SERVICE_ACCOUNTS_DN
 
 
 class TestRootCredentialRotation:
@@ -57,7 +57,7 @@ class TestRootCredentialRotation:
         Here we verify the API succeeds and Vault stores the new credential.
         """
         # Reset admin password to a known value and reconfigure
-        reset_ldap_user_password("admin", LDAP_ADMIN_PASSWORD)
+        reset_ldap_account_password("admin", LDAP_ADMIN_PASSWORD)
         time.sleep(1)
 
         vault_client.write(
@@ -66,7 +66,7 @@ class TestRootCredentialRotation:
             bindpass=LDAP_ADMIN_PASSWORD,
             url=LDAP_URL,
             schema="openldap",
-            userdn=LDAP_USERS_DN,
+            userdn=LDAP_SERVICE_ACCOUNTS_DN,
             userattr="cn",
         )
 

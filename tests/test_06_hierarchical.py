@@ -12,28 +12,28 @@ import pytest
 
 from conftest import (
     MOUNT_POINT,
-    recreate_ldap_user,
+    recreate_service_account,
 )
 
 
 @pytest.fixture(scope="module")
 def hierarchical_roles(vault_client, ensure_ldap_engine):
     """Create hierarchical static roles and clean up after."""
-    recreate_ldap_user("alice", "alicepassword")
-    recreate_ldap_user("bob", "bobpassword")
+    recreate_service_account("svc-account-1", "svcaccount1password")
+    recreate_service_account("svc-account-2", "svcaccount2password")
 
     vault_client.write(
         f"{MOUNT_POINT}/static-role/org/dev",
-        dn="cn=alice,ou=users,dc=learn,dc=example",
-        username="alice",
+        dn="cn=svc-account-1,ou=ServiceAccounts,dc=hashicups,dc=local",
+        username="svc-account-1",
         rotation_period="24h",
     )
     time.sleep(2)
 
     vault_client.write(
         f"{MOUNT_POINT}/static-role/org/platform/sre",
-        dn="cn=bob,ou=users,dc=learn,dc=example",
-        username="bob",
+        dn="cn=svc-account-2,ou=ServiceAccounts,dc=hashicups,dc=local",
+        username="svc-account-2",
         rotation_period="24h",
     )
     time.sleep(2)
@@ -76,11 +76,11 @@ class TestHierarchicalStaticRoles:
         """Read a specific hierarchical role."""
         resp = vault_client.read(f"{MOUNT_POINT}/static-role/org/dev")
         assert resp is not None
-        assert resp["data"]["username"] == "alice"
+        assert resp["data"]["username"] == "svc-account-1"
 
         resp = vault_client.read(f"{MOUNT_POINT}/static-role/org/platform/sre")
         assert resp is not None
-        assert resp["data"]["username"] == "bob"
+        assert resp["data"]["username"] == "svc-account-2"
 
     def test_read_hierarchical_credentials(self, vault_client, hierarchical_roles):
         """Read credentials from hierarchical roles."""

@@ -18,22 +18,22 @@ import pytest
 
 from conftest import (
     LDAP_HOST_URL,
-    LDAP_USERS_DN,
+    LDAP_SERVICE_ACCOUNTS_DN,
     MOUNT_POINT,
     ldap_bind_check,
-    recreate_ldap_user,
+    recreate_service_account,
 )
 
 
 @pytest.fixture(scope="module")
 def library_set(vault_client, ensure_ldap_engine):
     """Create a library set for testing and clean up after."""
-    recreate_ldap_user("svc-checkout-1", "svcpassword1")
-    recreate_ldap_user("svc-checkout-2", "svcpassword2")
+    recreate_service_account("svc-library-1", "svcpassword1")
+    recreate_service_account("svc-library-2", "svcpassword2")
 
     vault_client.write(
         f"{MOUNT_POINT}/library/svc-team",
-        service_account_names=["svc-checkout-1", "svc-checkout-2"],
+        service_account_names=["svc-library-1", "svc-library-2"],
         ttl="1h",
         max_ttl="2h",
         disable_check_in_enforcement=False,
@@ -43,7 +43,7 @@ def library_set(vault_client, ensure_ldap_engine):
     try:
         vault_client.write(
             f"{MOUNT_POINT}/library/manage/svc-team/check-in",
-            service_account_names=["svc-checkout-1", "svc-checkout-2"],
+            service_account_names=["svc-library-1", "svc-library-2"],
         )
     except Exception:
         pass
@@ -61,8 +61,8 @@ class TestLibrarySetCRUD:
         resp = vault_client.read(f"{MOUNT_POINT}/library/{library_set}")
         assert resp is not None
         data = resp["data"]
-        assert "svc-checkout-1" in data["service_account_names"]
-        assert "svc-checkout-2" in data["service_account_names"]
+        assert "svc-library-1" in data["service_account_names"]
+        assert "svc-library-2" in data["service_account_names"]
 
     def test_list_library_sets(self, vault_client, library_set):
         """List all library sets."""
@@ -96,11 +96,11 @@ class TestServiceAccountCheckout:
         assert "service_account_name" in data
         account = data["service_account_name"]
         password = data["password"]
-        assert account in ["svc-checkout-1", "svc-checkout-2"]
+        assert account in ["svc-library-1", "svc-library-2"]
         assert len(password) > 0
 
         # Verify LDAP bind
-        dn = f"cn={account},ou=users,dc=learn,dc=example"
+        dn = f"cn={account},ou=ServiceAccounts,dc=hashicups,dc=local"
         assert ldap_bind_check(dn, password), \
             f"Checked-out credential should work for LDAP bind on {dn}"
 
@@ -163,12 +163,12 @@ class TestCheckOutBothAccounts:
         account2 = resp2["data"]["service_account_name"]
 
         assert account1 != account2, "Should get different accounts"
-        assert {account1, account2} == {"svc-checkout-1", "svc-checkout-2"}
+        assert {account1, account2} == {"svc-library-1", "svc-library-2"}
 
         # Both should be unavailable
         status = vault_client.read(f"{MOUNT_POINT}/library/{library_set}/status")
-        assert status["data"]["svc-checkout-1"]["available"] is False
-        assert status["data"]["svc-checkout-2"]["available"] is False
+        assert status["data"]["svc-library-1"]["available"] is False
+        assert status["data"]["svc-library-2"]["available"] is False
 
         # Check both back in
         vault_client.write(

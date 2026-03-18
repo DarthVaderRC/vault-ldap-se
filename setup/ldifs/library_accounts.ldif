@@ -1,0 +1,13 @@
+dn: cn=svc-library-1,ou=ServiceAccounts,dc=hashicups,dc=local
+objectClass: person
+objectClass: top
+cn: svc-library-1
+sn: svc-library-1
+userPassword: svcpassword1
+
+dn: cn=svc-library-2,ou=ServiceAccounts,dc=hashicups,dc=local
+objectClass: person
+objectClass: top
+cn: svc-library-2
+sn: svc-library-2
+userPassword: svcpassword2

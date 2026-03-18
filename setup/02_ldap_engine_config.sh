@@ -19,11 +19,11 @@ vault secrets enable ldap
 echo ""
 echo "=== Configuring LDAP secrets engine ==="
 vault write ldap/config \
-    binddn="cn=admin,dc=learn,dc=example" \
+    binddn="cn=admin,dc=hashicups,dc=local" \
     bindpass="2LearnVault" \
     url="ldap://${OPENLDAP_IP}" \
     schema="openldap" \
-    userdn="ou=users,dc=learn,dc=example" \
+    userdn="ou=ServiceAccounts,dc=hashicups,dc=local" \
     userattr="cn"
 
 echo ""

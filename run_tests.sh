@@ -26,7 +26,7 @@ echo ""
 # Reset state for clean test run
 echo "Resetting LDAP admin password..."
 docker exec -i vault-ldap-openldap ldapmodify -Y EXTERNAL -H ldapi:/// <<'EOF'
-dn: cn=admin,dc=learn,dc=example
+dn: cn=admin,dc=hashicups,dc=local
 changetype: modify
 replace: userPassword
 userPassword: 2LearnVault
@@ -34,15 +34,15 @@ EOF
 
 OPENLDAP_IP=$(docker inspect vault-ldap-openldap --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
 vault write ldap/config \
-    binddn="cn=admin,dc=learn,dc=example" \
+    binddn="cn=admin,dc=hashicups,dc=local" \
     bindpass="2LearnVault" \
     url="ldap://${OPENLDAP_IP}" \
     schema="openldap" \
-    userdn="ou=users,dc=learn,dc=example" \
+    userdn="ou=ServiceAccounts,dc=hashicups,dc=local" \
     userattr="cn" >/dev/null 2>&1
 
 # Clean any leftover roles
-for role in alice bob alice-policy org/dev org/platform/sre; do
+for role in svc-account-1 svc-account-2 svc-account-1-policy org/dev org/platform/sre; do
     vault delete "ldap/static-role/${role}" 2>/dev/null || true
 done
 vault write ldap/config password_policy="" 2>/dev/null || true

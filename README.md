@@ -31,18 +31,22 @@ vault-ldap-se/
 │   ├── 01_vault_policy_setup.sh         # Vault admin policy & token
 │   ├── 02_ldap_engine_config.sh         # Enable & configure LDAP engine
 │   ├── ldifs/
-│   │   ├── base.ldif                    # Base OUs (users, groups)
-│   │   ├── users.ldif                   # alice, bob, ldapviewer + dev/ops groups
-│   │   ├── service_accounts.ldif        # svc-checkout-1, svc-checkout-2
+│   │   ├── base.ldif                    # Base OUs (service accounts, groups)
+│   │   ├── seed_entries.ldif            # svc-account-1, svc-account-2, ldapviewer + dev/ops groups
+│   │   ├── library_accounts.ldif        # svc-library-1, svc-library-2
 │   │   ├── creation.ldif                # Dynamic role creation template
 │   │   ├── deletion.ldif                # Dynamic role deletion template
 │   │   └── rollback.ldif                # Dynamic role rollback template
 │   └── policies/
 │       └── admin-policy.hcl             # Vault policy for demo operations
 ├── assets/
+│   ├── ldap-secrets-engine-block-diagram.mmd  # Simplified Mermaid block diagram
+│   ├── ldap-secrets-engine-code-map.html      # Interactive architecture playground
+│   ├── ldap-secrets-engine-architecture.mmd # Standalone Mermaid architecture diagram
 │   ├── phpldapadmin-demo.png            # Screenshot of phpLDAPadmin browsing the seeded LDAP tree
 │   └── vault-ldap-se-demo-recording.webm # Demo recording embedded in this README
 └── tests/
+    ├── README.md                       # Detailed automated test suite breakdown
     ├── conftest.py                      # Fixtures, LDAP helpers, constants
     ├── test_01_setup.py                 # Engine setup & root rotation
     ├── test_03_static_roles.py          # Static role lifecycle
@@ -90,6 +94,8 @@ pip3 install -r requirements.txt
 <video src="https://github.com/user-attachments/assets/0f3b4990-15e6-4f72-bf2d-e41cabb74a90" controls="controls" style="max-width: 100%;">
 </video>
 
+> Note: the embedded video and screenshot assets below were recorded before the `hashicups.local` / `ServiceAccounts` rename. The scripts, tests, LDIFs, and diagrams in this repository reflect the current naming.
+
 #### Optional: launch phpLDAPadmin alongside the demo
 
 ```bash
@@ -99,7 +105,7 @@ pip3 install -r requirements.txt
 - Open `https://127.0.0.1:6443/`
 - Your browser will show a certificate warning because the container uses a self-signed cert
 - Log in with:
-  - DN: `cn=ldapviewer,ou=users,dc=learn,dc=example`
+  - DN: `cn=ldapviewer,ou=ServiceAccounts,dc=hashicups,dc=local`
   - Password: `ldapviewerpassword`
 - Use `--no-cleanup` if you want the browser to stay available after the demo ends
 
@@ -126,6 +132,7 @@ The demo script (`demo.sh`) walks through all 7 feature areas with colored outpu
 
 ```bash
 ./demo.sh                        # Interactive (pauses for presenter)
+./demo.sh --help                 # Show built-in usage help
 ./demo.sh --auto                 # Non-interactive (runs straight through)
 ./demo.sh --skip-setup           # Skip infrastructure setup (reuse existing)
 ./demo.sh --no-cleanup           # Keep all resources after demo
@@ -139,6 +146,7 @@ The demo script (`demo.sh`) walks through all 7 feature areas with colored outpu
 
 | Flag | Effect |
 |---|---|
+| `-h`, `--help` | Prints built-in usage instructions and exits before checking Vault environment variables |
 | `--auto` | Disables pause prompts — runs all sections continuously |
 | `--skip-setup` | Skips Section 0 (OpenLDAP container creation, LDAP population, engine configuration). Assumes infrastructure is already running. |
 | `--no-cleanup` | Preserves all resources (containers, roles, engine) after the demo finishes. Useful for post-demo exploration. |
@@ -148,130 +156,128 @@ The demo script (`demo.sh`) walks through all 7 feature areas with colored outpu
 
 ### phpLDAPadmin Notes
 
-- The demo uses a dedicated read-only browser account: `cn=ldapviewer,ou=users,dc=learn,dc=example`
-- The browser account is intentionally separate from the LDAP admin user because Vault rotates the admin password during the demo
+- The demo uses a dedicated read-only browser account: `cn=ldapviewer,ou=ServiceAccounts,dc=hashicups,dc=local`
+- The browser account is intentionally separate from the LDAP admin account because Vault rotates the admin password during the demo
 - On Docker's default `bridge` network, phpLDAPadmin is configured to connect to OpenLDAP by container IP rather than container name
-- If you use `--no-cleanup`, the seeded users and service accounts remain present in LDAP for post-demo inspection
+- If you use `--no-cleanup`, the seeded service accounts and library accounts remain present in LDAP for post-demo inspection
 
 ---
 
-## Test Suite Details
+## Test Suite
 
-**40 tests** across 7 files, organized by feature area. All tests use `pytest` with the `hvac` Python client and verify results against both the Vault API and the live OpenLDAP directory.
+The automated suite covers **40 tests** across 7 files. Tests use `pytest` with the `hvac` Python client and verify both Vault API behavior and the live OpenLDAP directory.
 
-### test_01_setup.py — Engine Setup & Root Rotation (6 tests)
+For the full per-file breakdown, see [`tests/README.md`](./tests/README.md).
 
-| Test | What It Verifies |
-|---|---|
-| `test_engine_is_enabled` | LDAP engine is mounted at `ldap/` |
-| `test_config_is_readable` | Engine config returns expected `binddn` and `schema` |
-| `test_manual_root_rotation` | `POST ldap/rotate-root` succeeds, engine remains functional |
-| `test_config_still_works_after_rotation` | Static role creation works after root rotation |
-| `test_scheduled_root_rotation_enterprise` | Enterprise: `rotation_schedule` cron expression accepted |
-| `test_disable_automated_rotation_enterprise` | Enterprise: `disable_automated_rotation` toggle works |
+Coverage areas include:
 
-### test_03_static_roles.py — Static Roles (11 tests)
-
-| Test | What It Verifies |
-|---|---|
-| `test_create_static_role` | Create role for user `alice` with 1h rotation |
-| `test_read_static_credentials` | `GET ldap/static-cred/alice` returns username + password |
-| `test_static_credential_works_in_ldap` | LDAP bind succeeds with Vault-managed password |
-| `test_list_static_roles` | Role appears in `LIST ldap/static-role` |
-| `test_create_second_static_role` | Create a second role for `bob` |
-| `test_delete_static_role` | Delete role, confirm removal from list |
-| `test_manual_rotation` | `POST ldap/rotate-role/alice` changes the password |
-| `test_last_password_field` | `last_password` is populated after rotation |
-| `test_auto_rotation_short_period` | 10s `rotation_period` triggers automatic rotation |
-| `test_skip_import_rotation` | `skip_import_rotation=true` prevents initial password change |
-| `test_cleanup_alice_role` | Cleanup for downstream tests |
-
-### test_04_dynamic_creds.py — Dynamic Credentials (6 tests)
-
-| Test | What It Verifies |
-|---|---|
-| `test_create_dynamic_role` | Create role with base64-encoded LDIF templates |
-| `test_list_dynamic_roles` | Role appears in `LIST ldap/role` |
-| `test_read_dynamic_role` | Read role returns creation/deletion LDIF templates |
-| `test_generate_and_verify_dynamic_credentials` | Generate creds → LDAP bind succeeds → revoke → LDAP entry deleted |
-| `test_default_ttl` | Lease TTL matches configured `default_ttl` |
-| `test_custom_username_template` | `username_template` with Go template produces expected format |
-
-### test_05_library.py — Service Account Library (6 tests)
-
-| Test | What It Verifies |
-|---|---|
-| `test_create_library_set` | Create library set with 2 service accounts |
-| `test_list_library_sets` | Library set appears in `LIST ldap/library` |
-| `test_read_library_set` | Read returns correct accounts and `max_ttl` |
-| `test_checkout_verify_and_checkin` | Check-out → LDAP bind → check-in cycle |
-| `test_managed_check_in` | Force check-in of another client's checked-out account |
-| `test_checkout_both_accounts` | Both pool accounts checked out → 3rd request blocked |
-
-### test_06_hierarchical.py — Hierarchical Paths (5 tests)
-
-| Test | What It Verifies |
-|---|---|
-| `test_list_top_level_roles` | `LIST ldap/static-role` shows `org/` prefix |
-| `test_list_org_level_roles` | `LIST ldap/static-role/org/` shows `dev` and `platform/` |
-| `test_list_platform_level_roles` | `LIST ldap/static-role/org/platform/` shows `sre` |
-| `test_read_hierarchical_role` | Read `ldap/static-role/org/dev` returns role details |
-| `test_read_hierarchical_credentials` | Read `ldap/static-cred/org/dev` returns valid credentials |
-
-### test_07_password_policy.py — Password Policies (6 tests)
-
-| Test | What It Verifies |
-|---|---|
-| `test_create_password_policy` | Create policy with length + charset rules |
-| `test_apply_policy_to_engine` | Set `password_policy` on LDAP engine config |
-| `test_generate_password_with_policy` | `GET sys/policies/password/<name>/generate` returns compliant password |
-| `test_static_role_respects_policy` | Static role rotation produces policy-compliant passwords |
-| `test_dynamic_role_respects_policy` | Dynamic credential passwords follow the policy |
-| `test_remove_password_policy_from_engine` | Clear policy from engine config (cleanup) |
+- Engine setup and root rotation
+- Static roles and password rotation
+- Dynamic credentials and lease revocation cleanup
+- Service account library check-out/check-in
+- Hierarchical paths
+- Password policies
 
 ---
 
 ## Architecture
 
-```
-┌──────────────────────┐         ┌──────────────────────────┐
-│   Your Machine       │         │   Docker Bridge Network  │
-│                      │         │                          │
-│  pytest / demo.sh    │────────▶│  vault-ent (Vault Ent.)  │
-│                      │  :8200  │  ┌──────────────────────┐│
-│  LDAP bind verify    │────────▶│  │ LDAP Secrets Engine  ││
-│                      │  :389   │  └──────┬───────────────┘│
-│                      │         │         │                │
-│                      │         │         ▼                │
-│                      │         │  vault-ldap-openldap     │
-│                      │         │  (osixia/openldap:1.4.0) │
-│                      │         │  dc=learn,dc=example     │
-│                      │         └──────────────────────────┘
-└──────────────────────┘
+> This demo uses the Vault LDAP **Secrets Engine**. It does **not** configure Vault's LDAP **auth method**.
+
+### Simplified block diagram
+
+```mermaid
+flowchart LR
+    HOST["Host machine<br/>demo.sh + tests"] --> VAULT["Vault Enterprise<br/>ldap secrets engine"]
+    VAULT --> DIRECTORY["OpenLDAP<br/>dc=hashicups,dc=local"]
+    VAULT --> STATIC["Static roles<br/>svc-account-1,svc-account-2"]
+    VAULT --> DYNAMIC["Dynamic credentials<br/>ephemeral service accounts"]
+    VAULT --> LIBRARY["Library checkout<br/>svc-library-1,svc-library-2"]
+    PHPLDAP["phpLDAPadmin<br/>(optional)"] -.-> DIRECTORY
 ```
 
-- **Vault** connects to OpenLDAP via Docker bridge IP (e.g., `172.17.0.3:389`)
-- **Tests/demo** connect to Vault via `localhost:8200` and verify LDAP binds via `localhost:389`
-- After root rotation, all LDAP admin operations use **SASL EXTERNAL** (`docker exec ... -Y EXTERNAL -H ldapi:///`) to avoid dependency on knowing the rotated password
+### Detailed architecture
+
+```mermaid
+flowchart LR
+    subgraph HOST["Host machine"]
+        DEMO["demo.sh"]
+        TESTS["pytest / hvac"]
+        VERIFY["LDAP bind verification<br/>ldapwhoami / ldap_bind_check"]
+    end
+
+    subgraph DOCKER["Docker bridge network"]
+        subgraph VAULT["vault-ent / Vault Enterprise"]
+            API["Vault API<br/>localhost:8200"]
+            subgraph LDAPSE["LDAP secrets engine (ldap/)"]
+                CONFIG["Engine config<br/>binddn + userdn + schema=openldap"]
+                STATIC["Static roles<br/>static-role/* / static-cred/*"]
+                DYNAMIC["Dynamic roles<br/>LDIF create / delete / rollback"]
+                LIBRARY["Library sets<br/>check-out / check-in"]
+                POLICY["Password policy"]
+            end
+        end
+
+        subgraph LDAP["vault-ldap-openldap / OpenLDAP"]
+            DIRECTORY["Directory service<br/>dc=hashicups,dc=local / port 389"]
+            ACCOUNTS["ou=ServiceAccounts<br/>svc-account-1, svc-account-2, dynamic service accounts"]
+            GROUPS["ou=groups<br/>dev, ops"]
+            LIBRARY_ACCOUNTS["Library accounts<br/>svc-library-1, svc-library-2"]
+        end
+
+        PHPLDAP["phpLDAPadmin (optional)<br/>ldapviewer read-only account"]
+    end
+
+    DEMO -->|"Vault CLI / API"| API
+    TESTS -->|"hvac / API assertions"| API
+    DEMO -->|"direct LDAP checks"| VERIFY
+    TESTS -->|"direct LDAP checks"| VERIFY
+    VERIFY -->|"bind to localhost:389"| DIRECTORY
+
+    API --> LDAPSE
+    CONFIG -->|"bind as LDAP admin<br/>manage entries + passwords"| DIRECTORY
+    STATIC -->|"rotate imported service account passwords"| ACCOUNTS
+    DYNAMIC -->|"create ephemeral service accounts via LDIF"| ACCOUNTS
+    DYNAMIC -->|"delete on lease revoke"| ACCOUNTS
+    LIBRARY -->|"lease pooled service accounts"| LIBRARY_ACCOUNTS
+    DIRECTORY --> ACCOUNTS
+    DIRECTORY --> GROUPS
+    DIRECTORY --> LIBRARY_ACCOUNTS
+    GROUPS --- ACCOUNTS
+    POLICY -.->|"influences generated passwords"| STATIC
+    POLICY -.->|"influences generated passwords"| DYNAMIC
+    PHPLDAP -.->|"browse seeded directory"| DIRECTORY
+```
+
+- **Host tools** call Vault at `localhost:8200`
+- **Vault's `ldap/` secrets engine** connects to OpenLDAP over the Docker bridge network
+- **Tests and demo steps** also verify credentials by binding directly to LDAP at `localhost:389`
+- **Static roles** rotate passwords for imported LDAP service accounts, **dynamic roles** create and delete ephemeral service accounts from LDIF templates, and **library sets** lease pooled service accounts
+- **Engine-level password policy** influences generated passwords for static and dynamic credentials
+- **phpLDAPadmin** is optional and uses the dedicated `ldapviewer` account for read-only browsing
+- Simplified block diagram source: `assets/ldap-secrets-engine-block-diagram.mmd`
+- Standalone Mermaid source: `assets/ldap-secrets-engine-architecture.mmd`
+- Interactive architecture playground: `assets/ldap-secrets-engine-code-map.html` (open locally in a browser)
+- After root rotation, admin LDAP maintenance in tests uses **SASL EXTERNAL** (`docker exec ... -Y EXTERNAL -H ldapi:///`) to avoid depending on the rotated password
 
 ---
 
 ## LDAP Directory Layout
 
 ```
-dc=learn,dc=example
-├── ou=users
-│   ├── cn=alice          (member of: dev)
-│   ├── cn=bob            (member of: ops)
-│   ├── cn=ldapviewer     (read-only phpLDAPadmin browser account)
-│   ├── cn=svc-checkout-1 (library service account)
-│   └── cn=svc-checkout-2 (library service account)
+dc=hashicups,dc=local
+├── ou=ServiceAccounts
+│   ├── cn=svc-account-1    (member of: dev)
+│   ├── cn=svc-account-2    (member of: dev, ops)
+│   ├── cn=ldapviewer       (read-only phpLDAPadmin browser account)
+│   ├── cn=svc-library-1    (library service account)
+│   └── cn=svc-library-2    (library service account)
 └── ou=groups
-    ├── cn=dev            (member: alice)
-    └── cn=ops            (member: bob)
+    ├── cn=dev             (members: svc-account-1, svc-account-2)
+    └── cn=ops             (member: svc-account-2)
 ```
 
-Dynamic credentials are created under `ou=users` and cleaned up on lease revocation via the deletion LDIF template.
+Dynamic credentials are created under `ou=ServiceAccounts` as ephemeral service accounts and cleaned up on lease revocation via the deletion LDIF template.
 
 ---
 
@@ -279,7 +285,7 @@ Dynamic credentials are created under `ou=users` and cleaned up on lease revocat
 
 ### OpenLDAP rootDN Password Behavior
 
-The `cn=admin,dc=learn,dc=example` is OpenLDAP's **rootDN**. Its authentication password is stored as `olcRootPW` in the config database (`cn=config`), **not** as `userPassword` on the entry itself. Vault's `rotate-root` modifies `userPassword`, which does not affect rootDN authentication. This is expected OpenLDAP behavior — for production, use a non-rootDN service account as the bind DN.
+The `cn=admin,dc=hashicups,dc=local` is OpenLDAP's **rootDN**. Its authentication password is stored as `olcRootPW` in the config database (`cn=config`), **not** as `userPassword` on the entry itself. Vault's `rotate-root` modifies `userPassword`, which does not affect rootDN authentication. This is expected OpenLDAP behavior — for production, use a non-rootDN service account as the bind DN.
 
 ### SASL EXTERNAL Authentication
 
@@ -296,7 +302,7 @@ This authenticates via Unix socket credentials (root inside the container) and r
 The optional phpLDAPadmin flow seeds a dedicated account:
 
 ```text
-cn=ldapviewer,ou=users,dc=learn,dc=example
+cn=ldapviewer,ou=ServiceAccounts,dc=hashicups,dc=local
 ```
 
 This account is granted read-only ACLs on the LDAP tree so it can browse entries in the UI without depending on the admin bind DN, whose password is rotated by Vault during the demo.
@@ -307,7 +313,7 @@ Dynamic roles use Go template syntax in base64-encoded LDIF:
 
 ```ldif
 # creation.ldif
-dn: cn={{.Username}},ou=users,dc=learn,dc=example
+dn: cn={{.Username}},ou=ServiceAccounts,dc=hashicups,dc=local
 objectClass: inetOrgPerson
 cn: {{.Username}}
 sn: {{.Username}}

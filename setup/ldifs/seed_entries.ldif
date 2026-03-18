@@ -1,0 +1,38 @@
+dn: cn=dev,ou=groups,dc=hashicups,dc=local
+objectClass: groupofnames
+objectClass: top
+description: development team group
+cn: dev
+member: cn=svc-account-1,ou=ServiceAccounts,dc=hashicups,dc=local
+member: cn=svc-account-2,ou=ServiceAccounts,dc=hashicups,dc=local
+
+dn: cn=ops,ou=groups,dc=hashicups,dc=local
+objectClass: groupofnames
+objectClass: top
+description: operations team group
+cn: ops
+member: cn=svc-account-2,ou=ServiceAccounts,dc=hashicups,dc=local
+
+dn: cn=svc-account-1,ou=ServiceAccounts,dc=hashicups,dc=local
+objectClass: person
+objectClass: top
+cn: svc-account-1
+sn: svc-account-1
+memberOf: cn=dev,ou=groups,dc=hashicups,dc=local
+userPassword: svcaccount1password
+
+dn: cn=svc-account-2,ou=ServiceAccounts,dc=hashicups,dc=local
+objectClass: person
+objectClass: top
+cn: svc-account-2
+sn: svc-account-2
+memberOf: cn=dev,ou=groups,dc=hashicups,dc=local
+memberOf: cn=ops,ou=groups,dc=hashicups,dc=local
+userPassword: svcaccount2password
+
+dn: cn=ldapviewer,ou=ServiceAccounts,dc=hashicups,dc=local
+objectClass: person
+objectClass: top
+cn: ldapviewer
+sn: ldapviewer
+userPassword: ldapviewerpassword

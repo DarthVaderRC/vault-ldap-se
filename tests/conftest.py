@@ -18,10 +18,10 @@ VAULT_ADDR = os.getenv("VAULT_ADDR", "http://127.0.0.1:8200")
 VAULT_ROOT_TOKEN = os.environ["VAULT_ROOT_TOKEN"]  # must be set in environment
 
 OPENLDAP_CONTAINER = "vault-ldap-openldap"
-LDAP_ADMIN_DN = "cn=admin,dc=learn,dc=example"
+LDAP_ADMIN_DN = "cn=admin,dc=hashicups,dc=local"
 LDAP_ADMIN_PASSWORD = "2LearnVault"
-LDAP_BASE_DN = "dc=learn,dc=example"
-LDAP_USERS_DN = "ou=users,dc=learn,dc=example"
+LDAP_BASE_DN = "dc=hashicups,dc=local"
+LDAP_SERVICE_ACCOUNTS_DN = "ou=ServiceAccounts,dc=hashicups,dc=local"
 
 MOUNT_POINT = "ldap"
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -93,7 +93,7 @@ def ensure_ldap_engine(vault_client):
             bindpass=LDAP_ADMIN_PASSWORD,
             url=LDAP_URL,
             schema="openldap",
-            userdn=LDAP_USERS_DN,
+            userdn=LDAP_SERVICE_ACCOUNTS_DN,
             userattr="cn",
         )
     return True
@@ -132,7 +132,7 @@ def ldap_search(base, search_filter, attrs=None, url=None):
 
 def ldap_entry_exists(cn, base=None):
     """Check if an LDAP entry with the given CN exists."""
-    _base = base or LDAP_USERS_DN
+    _base = base or LDAP_SERVICE_ACCOUNTS_DN
     output = ldap_search(_base, f"(cn={cn})", ["cn"])
     return f"cn: {cn}" in output
 
@@ -147,14 +147,14 @@ def wait_for_condition(condition_fn, timeout=30, interval=2, msg="Condition"):
     raise TimeoutError(f"{msg} not met within {timeout}s")
 
 
-def reset_ldap_user_password(cn, new_password):
-    """Reset an LDAP user password using ldappasswd via docker exec.
-    For the admin account, the DN is cn=admin,dc=learn,dc=example (not under ou=users).
+def reset_ldap_account_password(cn, new_password):
+    """Reset an LDAP account password using docker exec.
+    For the admin account, the DN is cn=admin,dc=hashicups,dc=local (not under ou=ServiceAccounts).
     """
     if cn == "admin":
-        target_dn = f"cn=admin,dc=learn,dc=example"
+        target_dn = f"cn=admin,dc=hashicups,dc=local"
     else:
-        target_dn = f"cn={cn},ou=users,dc=learn,dc=example"
+        target_dn = f"cn={cn},ou=ServiceAccounts,dc=hashicups,dc=local"
 
     # Use ldappasswd as the current admin (which Vault controls after rotation)
     # We use docker exec with ldapmodify to reset the password internally
@@ -171,9 +171,9 @@ userPassword: {new_password}
     )
 
 
-def recreate_ldap_user(cn, password):
-    """Delete and recreate an LDAP user using docker exec (SASL EXTERNAL)."""
-    dn = f"cn={cn},{LDAP_USERS_DN}"
+def recreate_service_account(cn, password):
+    """Delete and recreate an LDAP service account using docker exec (SASL EXTERNAL)."""
+    dn = f"cn={cn},{LDAP_SERVICE_ACCOUNTS_DN}"
 
     # Delete if exists (ignore errors)
     delete_ldif = f"dn: {dn}\nchangetype: delete\n"
@@ -183,7 +183,7 @@ def recreate_ldap_user(cn, password):
         input=delete_ldif, capture_output=True, text=True,
     )
 
-    # Create user
+    # Create service account
     add_ldif = f"""dn: {dn}
 objectClass: person
 objectClass: top
@@ -199,6 +199,6 @@ userPassword: {password}
     if result.returncode != 0 and "Already exists" not in result.stderr:
         # If it already exists, reset the password instead
         if "already exists" in result.stderr.lower():
-            reset_ldap_user_password(cn, password)
+            reset_ldap_account_password(cn, password)
         else:
-            raise RuntimeError(f"Failed to create LDAP user {cn}: {result.stderr}")
+            raise RuntimeError(f"Failed to create LDAP service account {cn}: {result.stderr}")

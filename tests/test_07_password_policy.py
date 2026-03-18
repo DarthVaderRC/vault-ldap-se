@@ -15,12 +15,12 @@ import time
 import pytest
 
 from conftest import (
-    LDAP_USERS_DN,
+    LDAP_SERVICE_ACCOUNTS_DN,
     LDAP_URL,
     MOUNT_POINT,
     PROJECT_DIR,
     ldap_bind_check,
-    recreate_ldap_user,
+    recreate_service_account,
 )
 
 
@@ -102,25 +102,25 @@ class TestPasswordPolicyWithStaticRole:
 
     def test_static_role_respects_policy(self, vault_client, ensure_ldap_engine):
         """Verify static role passwords follow the configured policy."""
-        recreate_ldap_user("alice", "alicepassword")
+        recreate_service_account("svc-account-1", "svcaccount1password")
 
         # Ensure any prior role is cleaned up
         try:
-            vault_client.delete(f"{MOUNT_POINT}/static-role/alice")
+            vault_client.delete(f"{MOUNT_POINT}/static-role/svc-account-1")
             time.sleep(1)
         except Exception:
             pass
 
         vault_client.write(
-            f"{MOUNT_POINT}/static-role/alice-policy",
-            dn="cn=alice,ou=users,dc=learn,dc=example",
-            username="alice",
+            f"{MOUNT_POINT}/static-role/svc-account-1-policy",
+            dn="cn=svc-account-1,ou=ServiceAccounts,dc=hashicups,dc=local",
+            username="svc-account-1",
             rotation_period="24h",
         )
 
         time.sleep(2)
 
-        resp = vault_client.read(f"{MOUNT_POINT}/static-cred/alice-policy")
+        resp = vault_client.read(f"{MOUNT_POINT}/static-cred/svc-account-1-policy")
         password = resp["data"]["password"]
 
         # Verify the password meets policy requirements
@@ -131,7 +131,7 @@ class TestPasswordPolicyWithStaticRole:
         assert re.search(r"[!@#$%^&*]", password), "Should contain special char"
 
         # Cleanup
-        vault_client.delete(f"{MOUNT_POINT}/static-role/alice-policy")
+        vault_client.delete(f"{MOUNT_POINT}/static-role/svc-account-1-policy")
 
 
 class TestPasswordPolicyWithDynamicRole:

@@ -4,8 +4,8 @@ Test 04: Dynamic Credentials
 Covers:
 - Creating a dynamic role with LDIF templates
 - Generating dynamic credentials
-- Verifying the dynamically created LDAP user can bind
-- Lease revocation deletes the LDAP user
+- Verifying the dynamically created LDAP service account can bind
+- Lease revocation deletes the LDAP service account
 - Custom username_template
 - TTL behavior (default_ttl, max_ttl)
 - Listing dynamic roles
@@ -18,7 +18,7 @@ import pytest
 
 from conftest import (
     LDAP_HOST_URL,
-    LDAP_USERS_DN,
+    LDAP_SERVICE_ACCOUNTS_DN,
     MOUNT_POINT,
     PROJECT_DIR,
     ldap_bind_check,
@@ -106,9 +106,9 @@ class TestDynamicCredentialGeneration:
         assert ldap_bind_check(dn, password), \
             f"Dynamic credential should allow LDAP bind for {dn}"
 
-        # Verify user exists in LDAP
+        # Verify the generated service account exists in LDAP
         assert ldap_entry_exists(username), \
-            f"Dynamic user {username} should exist in LDAP"
+            f"Dynamic service account {username} should exist in LDAP"
 
         # Revoke the lease
         vault_client.sys.revoke_lease(lease_id)
@@ -116,7 +116,7 @@ class TestDynamicCredentialGeneration:
 
         # User should be deleted from LDAP
         assert not ldap_entry_exists(username), \
-            f"Dynamic user {username} should be deleted after revocation"
+            f"Dynamic service account {username} should be deleted after revocation"
 
 
 class TestDynamicCredentialTTL:

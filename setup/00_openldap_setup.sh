@@ -3,11 +3,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONTAINER_NAME="vault-ldap-openldap"
-LDAP_ORG="learn"
-LDAP_DOMAIN="learn.example"
+LDAP_ORG="HashiCups"
+LDAP_DOMAIN="hashicups.local"
 LDAP_ADMIN_PASSWORD="2LearnVault"
 LDAP_IMAGE="osixia/openldap:1.4.0"
-PHPLDAPADMIN_LOGIN_DN="cn=ldapviewer,ou=users,dc=learn,dc=example"
+PHPLDAPADMIN_LOGIN_DN="cn=ldapviewer,ou=ServiceAccounts,dc=hashicups,dc=local"
 PHPLDAPADMIN_LOGIN_PASSWORD="ldapviewerpassword"
 PHPLDAPADMIN_CONTAINER_NAME="vault-ldap-phpldapadmin"
 PHPLDAPADMIN_IMAGE="osixia/phpldapadmin:latest"
@@ -59,21 +59,21 @@ echo "OpenLDAP container IP: ${OPENLDAP_IP}"
 echo ""
 echo "=== Populating OpenLDAP with base structure ==="
 docker cp "${SCRIPT_DIR}/ldifs/base.ldif" "${CONTAINER_NAME}:/tmp/base.ldif"
-docker exec "${CONTAINER_NAME}" ldapadd -cxD "cn=admin,dc=learn,dc=example" -w "${LDAP_ADMIN_PASSWORD}" -f /tmp/base.ldif
+docker exec "${CONTAINER_NAME}" ldapadd -cxD "cn=admin,dc=hashicups,dc=local" -w "${LDAP_ADMIN_PASSWORD}" -f /tmp/base.ldif
 
 echo ""
-echo "=== Adding users (alice, bob, ldapviewer) ==="
-docker cp "${SCRIPT_DIR}/ldifs/users.ldif" "${CONTAINER_NAME}:/tmp/users.ldif"
-docker exec "${CONTAINER_NAME}" ldapadd -cxD "cn=admin,dc=learn,dc=example" -w "${LDAP_ADMIN_PASSWORD}" -f /tmp/users.ldif
+echo "=== Adding seeded static accounts (svc-account-1, svc-account-2, ldapviewer) ==="
+docker cp "${SCRIPT_DIR}/ldifs/seed_entries.ldif" "${CONTAINER_NAME}:/tmp/seed_entries.ldif"
+docker exec "${CONTAINER_NAME}" ldapadd -cxD "cn=admin,dc=hashicups,dc=local" -w "${LDAP_ADMIN_PASSWORD}" -f /tmp/seed_entries.ldif
 
 echo ""
-echo "=== Adding service accounts ==="
-docker cp "${SCRIPT_DIR}/ldifs/service_accounts.ldif" "${CONTAINER_NAME}:/tmp/service_accounts.ldif"
-docker exec "${CONTAINER_NAME}" ldapadd -cxD "cn=admin,dc=learn,dc=example" -w "${LDAP_ADMIN_PASSWORD}" -f /tmp/service_accounts.ldif
+echo "=== Adding library accounts ==="
+docker cp "${SCRIPT_DIR}/ldifs/library_accounts.ldif" "${CONTAINER_NAME}:/tmp/library_accounts.ldif"
+docker exec "${CONTAINER_NAME}" ldapadd -cxD "cn=admin,dc=hashicups,dc=local" -w "${LDAP_ADMIN_PASSWORD}" -f /tmp/library_accounts.ldif
 
 echo ""
 echo "=== Verifying LDAP entries ==="
-docker exec "${CONTAINER_NAME}" ldapsearch -xD "cn=admin,dc=learn,dc=example" -w "${LDAP_ADMIN_PASSWORD}" -b "dc=learn,dc=example" "(objectClass=person)" cn
+docker exec "${CONTAINER_NAME}" ldapsearch -xD "cn=admin,dc=hashicups,dc=local" -w "${LDAP_ADMIN_PASSWORD}" -b "dc=hashicups,dc=local" "(objectClass=person)" cn
 
 if [ "$START_PHPLDAPADMIN" = true ]; then
     echo ""
@@ -83,8 +83,8 @@ dn: olcDatabase={1}mdb,cn=config
 changetype: modify
 replace: olcAccess
 olcAccess: {0}to * by dn.exact=gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth manage by * break
-olcAccess: {1}to attrs=userPassword,shadowLastChange by self write by dn="cn=admin,dc=learn,dc=example" write by anonymous auth by * none
-olcAccess: {2}to * by dn="${PHPLDAPADMIN_LOGIN_DN}" read by self read by dn="cn=admin,dc=learn,dc=example" write by * none
+olcAccess: {1}to attrs=userPassword,shadowLastChange by self write by dn="cn=admin,dc=hashicups,dc=local" write by anonymous auth by * none
+olcAccess: {2}to * by dn="${PHPLDAPADMIN_LOGIN_DN}" read by self read by dn="cn=admin,dc=hashicups,dc=local" write by * none
 EOF
     echo "Granted read-only directory access to the phpLDAPadmin browser account."
 
@@ -111,6 +111,6 @@ fi
 echo ""
 echo "=== OpenLDAP setup complete ==="
 echo "OpenLDAP IP: ${OPENLDAP_IP}"
-echo "Admin DN: cn=admin,dc=learn,dc=example"
+echo "Admin DN: cn=admin,dc=hashicups,dc=local"
 echo "Admin Password: ${LDAP_ADMIN_PASSWORD}"
-echo "Base DN: dc=learn,dc=example"
+echo "Base DN: dc=hashicups,dc=local"
