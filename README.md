@@ -190,9 +190,9 @@ Coverage areas include:
 flowchart LR
     HOST["Host machine<br/>demo.sh + tests"] --> VAULT["Vault Enterprise<br/>ldap secrets engine"]
     VAULT --> DIRECTORY["OpenLDAP<br/>dc=hashicups,dc=local"]
-    VAULT --> STATIC["Static roles<br/>svc-account-1,svc-account-2"]
+    VAULT --> STATIC["Static roles<br/>svc-account-1,<br>svc-account-2"]
     VAULT --> DYNAMIC["Dynamic credentials<br/>ephemeral service accounts"]
-    VAULT --> LIBRARY["Library checkout<br/>svc-library-1,svc-library-2"]
+    VAULT --> LIBRARY["Library checkout<br/>svc-library-1,<br>svc-library-2"]
     PHPLDAP["phpLDAPadmin<br/>(optional)"] -.-> DIRECTORY
 ```
 
