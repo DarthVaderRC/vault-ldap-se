@@ -131,14 +131,14 @@ flowchart LR
 
     subgraph engDir["**Engineering directory**<br/>dc=engineering,dc=hashicups,dc=local"]
       direction TB
-      engDelegatedOu["cn=Vault-bind, ou=delegated-admin"]
+      engDelegatedOu["cn=vault-bind,ou=delegated-admin"]
       engVaultOu["ou=vault, ou=ServiceAccounts"]
       engDelegatedOu -. "change/reset rights only" .-> engVaultOu
     end
 
     subgraph svcDir["**Shared services directory**<br/>dc=sharedservices,dc=hashicups,dc=local"]
       direction TB
-      svcDelegatedOu["cn=Vault-bind, ou=delegated-admin"]
+      svcDelegatedOu["cn=vault-bind,ou=delegated-admin"]
       svcVaultOu["ou=vault, ou=ServiceAccounts"]
       svcDelegatedOu -. "change/reset rights only" .-> svcVaultOu
     end
