@@ -1,0 +1,120 @@
+%%{init: {'flowchart': {'nodeSpacing': 55, 'rankSpacing': 70}} }%%
+%% Shared OpenLDAP service account management across Vault namespaces.
+%% Solid arrows show the main request path. Dotted arrows show delegated administration boundaries.
+flowchart LR
+  classDef control fill:#E8F0FE,stroke:#1A73E8,stroke-width:2px,color:#0B1F33;
+  classDef shared fill:#E6F4EA,stroke:#137333,stroke-width:3px,color:#0B1F33;
+  classDef tenant fill:#FFF4E5,stroke:#B06000,stroke-width:2px,color:#0B1F33;
+  classDef ldap fill:#F3E8FD,stroke:#7E57C2,stroke-width:2px,color:#0B1F33;
+  classDef actor fill:#FCE8E6,stroke:#D93025,stroke-width:2px,color:#0B1F33;
+  classDef note fill:#FFF8C5,stroke:#8D6E00,stroke-width:2px,color:#0B1F33;
+
+  eng1Actor["Engineering apps/users"]
+  eng2Actor["Engineering apps/users"]
+  svc1Actor["Shared services apps/users"]
+  svc2Actor["Shared services apps/users"]
+  vaultAdminActor["Vault admins and pipelines"]
+
+  subgraph vault["**Vault Enterprise Cluster**"]
+    direction TB
+    root["Admin control plane<br/>shared mount configuration"]
+    gpamode["**Cross-namespace access**<br/>group_policy_application_mode=any"]
+    root --> gpamode
+
+
+    subgraph engTenants["**Engineering namespaces**"]
+      direction LR
+      subgraph nsEng1["ns-engineering-1"]
+        direction TB
+        eng1Auth["Auth methods"]
+        eng1Alias["Entity alias"]
+        eng1Auth --> eng1Alias
+      end
+      subgraph nsEng2["ns-engineering-2"]
+        direction TB
+        eng2Auth["Auth methods"]
+        eng2Alias["Entity alias"]
+        eng2Auth --> eng2Alias
+      end
+    end
+
+    subgraph svcTenants["**Shared services namespaces**"]
+      direction LR
+      subgraph nsSvc1["ns-shared-services-1"]
+        direction TB
+        svc1Auth["Auth methods"]
+        svc1Alias["Entity alias"]
+        svc1Auth --> svc1Alias
+      end
+      subgraph nsSvc2["ns-shared-services-2"]
+        direction TB
+        svc2Auth["Auth methods"]
+        svc2Alias["Entity alias"]
+        svc2Auth --> svc2Alias
+      end
+    end
+
+    subgraph ldapShared["**Shared namespace: ldap-shared**"]
+      direction TB
+      engGroup["**Engineering entity group**<br/>policy grants on ldap-engineering/"]
+      svcGroup["**Shared services entity group**<br/>policy grants on ldap-sharedservices/"]
+      ldapEng["ldap-engineering/"]
+      ldapSvc["ldap-sharedservices/"]
+      rolePattern["**Hierarchical role pattern**<br/>&lt;namespace&gt;/&lt;team&gt;/&lt;app&gt;/&lt;role-type&gt;/&lt;role-name&gt;"]
+      examplePath["**Example static role**<br/>ldap-engineering/static-role/ns-engineering-1/team1/app1/static/svc-account-1"]
+
+      rolePattern -.-> examplePath
+      rolePattern -.-> ldapEng
+      rolePattern -.-> ldapSvc
+      engGroup --> ldapEng
+      svcGroup --> ldapSvc
+    end
+  end
+
+  subgraph openldap["**OpenLDAP deployment**"]
+    direction LR
+    ldapEndpoint["OpenLDAP endpoint<br/>ldaps://openldap.hashicups.local:636"]
+
+    subgraph engDir["**Engineering directory**<br/>dc=engineering,dc=hashicups,dc=local"]
+      direction TB
+      engDelegatedOu["cn=Vault-bind, ou=delegated-admin"]
+      engVaultOu["ou=vault, ou=ServiceAccounts"]
+      engDelegatedOu -. "change/reset rights only" .-> engVaultOu
+    end
+
+    subgraph svcDir["**Shared services directory**<br/>dc=sharedservices,dc=hashicups,dc=local"]
+      direction TB
+      svcDelegatedOu["cn=Vault-bind, ou=delegated-admin"]
+      svcVaultOu["ou=vault, ou=ServiceAccounts"]
+      svcDelegatedOu -. "change/reset rights only" .-> svcVaultOu
+    end
+
+    ldapEndpoint --> engDir
+    ldapEndpoint --> svcDir
+  end
+
+  eng1Actor -->|"authenticates to namespace"| eng1Auth
+  eng2Actor -->|"authenticates to namespace"| eng2Auth
+  svc1Actor -->|"authenticates to namespace"| svc1Auth
+  svc2Actor -->|"authenticates to namespace"| svc2Auth
+  vaultAdminActor -->|"authenticates to root namespace"| root
+  
+  gpamode --> ldapShared
+
+  eng1Alias -->|"maps into"| engGroup
+  eng2Alias -->|"maps into"| engGroup
+  svc1Alias -->|"maps into"| svcGroup
+  svc2Alias -->|"maps into"| svcGroup
+
+  ldapSvc -->|"uses shared endpoint"| ldapEndpoint
+  ldapEng -->|"uses shared endpoint"| ldapEndpoint
+
+  ldapEng -. "binds as cn=Vault-bind" .-> engDelegatedOu
+  ldapSvc -. "binds as cn=Vault-bind" .-> svcDelegatedOu
+
+  class root,gpamode,engGroup,svcGroup,vaultAdminActor control;
+  class ldapEng,ldapSvc shared;
+  class rolePattern,examplePath note;
+  class eng1Auth,eng1Alias,eng2Auth,eng2Alias,svc1Auth,svc1Alias,svc2Auth,svc2Alias tenant;
+  class ldapEndpoint,engDelegatedOu,engVaultOu,svcDelegatedOu,svcVaultOu ldap;
+  class eng1Actor,eng2Actor,svc1Actor,svc2Actor actor;
