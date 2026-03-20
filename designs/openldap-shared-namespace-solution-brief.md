@@ -398,4 +398,4 @@ A few operational considerations are worth calling out:
 
 ## Conclusion
 
-This targeted solution keeps the LDAP backend shared and centrally governed, while still letting multiple tenant namespaces consume the service cleanly. The important move is to centralize the LDAP secret engine mounts from tenant namespaces: many namespaces can consume one shared LDAP mount when the directory boundary, delegated administration model, identity mapping, and hierarchical naming convention are designed well.
+This targeted solution keeps the LDAP backend shared and centrally governed, while still letting multiple tenant namespaces consume the service cleanly. The important move is to centralize the LDAP secrets engine mounts from tenant namespaces: many namespaces can consume one shared LDAP mount when the directory boundary, delegated administration model, identity mapping, and hierarchical naming convention are designed well.
