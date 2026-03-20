@@ -6,7 +6,7 @@
 
 LDAP service accounts are managed centrally, but the users and applications that want to consume those accounts live across many tenant namespaces in HashiCorp Vault. The primary design qeustion then is: Should each tenant namespace run its own LDAP secrets engine configuration, or should LDAP secret engine access be managed centrally and shared safely across namespaces? If you place one LDAP secrets engine mount in every tenant namespace, you duplicate connection configuration, delegated administration, role naming, and ongoing operational ownership for the same backend directory service. That model becomes harder to govern as teams scale and makes it harder to apply a consistent operating model across the organization.
 
-The proposed solution keeps LDAP secrets engine management in one shared namespace, while workloads and users continue to authenticate in their own tenant namespaces. The Vault team owns the shared namespace and it's management. Users in tenant namespaces consume approved LDAP roles from the shared namespace by using cross-namespace access mechanism.
+The proposed solution keeps LDAP secrets engine management in one shared namespace, while workloads and users continue to authenticate in their own tenant namespaces. The Vault team owns the shared namespace and its management. Users in tenant namespaces consume approved LDAP roles from the shared namespace by using a cross-namespace access mechanism.
 
 This is a targeted solution brief, not a HashiCorp validated pattern. It describes the proposed operating model and technical shape for a specific customer scenario.
 
