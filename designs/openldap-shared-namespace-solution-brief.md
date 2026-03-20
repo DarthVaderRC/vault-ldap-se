@@ -246,7 +246,7 @@ For the LDAP secrets engine configuration itself:
 - configure each mount to target the right naming context
 - scope `userdn` to the Vault-managed OU under `ou=vault,ou=ServiceAccounts,...`
 - keep the bind DN delegated and narrowly privileged
-- once a ldap engine mount is configured, perform rotate-root on the binddn so that only Vault knows the password.
+- once an LDAP secrets engine mount is configured, perform rotate-root on the binddn so that only Vault knows the password.
 
 ## Hierarchical role path convention on the shared mounts
 
