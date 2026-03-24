@@ -36,3 +36,10 @@ objectClass: top
 cn: ldapviewer
 sn: ldapviewer
 userPassword: ldapviewerpassword
+
+dn: cn=svc-account-3,ou=engineering,ou=ServiceAccounts,dc=hashicups,dc=local
+objectClass: person
+objectClass: top
+cn: svc-account-3
+sn: svc-account-3
+userPassword: svcaccount3password

@@ -10,7 +10,7 @@ A comprehensive demonstration of **every feature** of HashiCorp Vault's [LDAP Se
 |---|---|---|
 | 1 | **Engine Setup & Configuration** | Enable engine, configure OpenLDAP connection, verify config |
 | 2 | **Root Credential Rotation** | Manual rotation, scheduled rotation (Enterprise), disable/re-enable auto-rotation |
-| 3 | **Static Roles** | CRUD operations, credential read, LDAP bind verification, manual rotation, auto-rotation with `rotation_period`, `skip_import_rotation` |
+| 3 | **Static Roles** | CRUD operations, credential read, LDAP bind verification, nested subtree coverage under `userdn`, manual rotation, auto-rotation with `rotation_period`, `skip_import_rotation` |
 | 4 | **Dynamic Credentials** | LDIF-based role creation, credential generation, lease revocation with LDAP cleanup, custom `username_template`, TTL configuration |
 | 5 | **Service Account Library** | Library set CRUD, check-out/check-in, managed (forced) check-in, pool exhaustion behavior |
 | 6 | **Hierarchical Paths** | Multi-level role organization (`org/dev`, `org/platform/sre`), listing at each level |
@@ -31,8 +31,8 @@ vault-ldap-se/
 │   ├── 01_vault_policy_setup.sh         # Vault admin policy & token
 │   ├── 02_ldap_engine_config.sh         # Enable & configure LDAP engine
 │   ├── ldifs/
-│   │   ├── base.ldif                    # Base OUs (service accounts, groups)
-│   │   ├── seed_entries.ldif            # svc-account-1, svc-account-2, ldapviewer + dev/ops groups
+│   │   ├── base.ldif                    # Base OUs (service accounts, groups, engineering child OU)
+│   │   ├── seed_entries.ldif            # svc-account-1, svc-account-2, nested svc-account-3, ldapviewer + dev/ops groups
 │   │   ├── library_accounts.ldif        # svc-library-1, svc-library-2
 │   │   ├── creation.ldif                # Dynamic role creation template
 │   │   ├── deletion.ldif                # Dynamic role deletion template
@@ -165,7 +165,7 @@ The demo script (`demo.sh`) walks through all 7 feature areas with colored outpu
 
 ## Test Suite
 
-The automated suite covers **40 tests** across 7 files. Tests use `pytest` with the `hvac` Python client and verify both Vault API behavior and the live OpenLDAP directory.
+The automated suite covers **41 tests** across 7 files. Tests use `pytest` with the `hvac` Python client and verify both Vault API behavior and the live OpenLDAP directory.
 
 For the full per-file breakdown, see [`tests/README.md`](./tests/README.md).
 
@@ -220,7 +220,7 @@ flowchart LR
 
         subgraph LDAP["vault-ldap-openldap / OpenLDAP"]
             DIRECTORY["Directory service<br/>dc=hashicups,dc=local / port 389"]
-            ACCOUNTS["ou=ServiceAccounts<br/>svc-account-1, svc-account-2, dynamic service accounts"]
+            ACCOUNTS["ou=ServiceAccounts<br/>svc-account-1, svc-account-2, svc-account-3 in engineering OU,<br/>dynamic service accounts"]
             GROUPS["ou=groups<br/>dev, ops"]
             LIBRARY_ACCOUNTS["Library accounts<br/>svc-library-1, svc-library-2"]
         end
@@ -270,6 +270,8 @@ dc=hashicups,dc=local
 │   ├── cn=svc-account-1    (member of: dev)
 │   ├── cn=svc-account-2    (member of: dev, ops)
 │   ├── cn=ldapviewer       (read-only phpLDAPadmin browser account)
+│   ├── ou=engineering
+│   │   └── cn=svc-account-3
 │   ├── cn=svc-library-1    (library service account)
 │   └── cn=svc-library-2    (library service account)
 └── ou=groups

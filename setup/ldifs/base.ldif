@@ -9,3 +9,9 @@ objectClass: organizationalunit
 objectClass: top
 ou: ServiceAccounts
 description: service accounts
+
+dn: ou=engineering,ou=ServiceAccounts,dc=hashicups,dc=local
+objectClass: organizationalunit
+objectClass: top
+ou: engineering
+description: engineering service accounts
