@@ -1,23 +1,25 @@
-# Targeted solution brief: shared OpenLDAP service account management with Vault namespaces
+# Shared OpenLDAP service account management with Vault namespaces
 
+*A Strategic Guide to Optimizing LDAP Secrets Engine Design in your organisation*
 
-
-## Problem statement
+## Challenge
 
 LDAP service accounts are managed centrally, but the users and applications that want to consume those accounts live across many tenant namespaces in HashiCorp Vault. The primary design question then is: Should each tenant namespace run its own LDAP secrets engine configuration, or should LDAP secret engine access be managed centrally and shared safely across namespaces? If you place one LDAP secrets engine mount in every tenant namespace, you duplicate connection configuration, delegated administration, role naming, and ongoing operational ownership for the same backend directory service. That model becomes harder to govern as teams scale and makes it harder to apply a consistent operating model across the organization.
 
+## Solution
+
 The proposed solution keeps LDAP secrets engine management in one shared namespace, while workloads and users continue to authenticate in their own tenant namespaces. The Vault team owns the shared namespace and its management. Users in tenant namespaces consume approved LDAP roles from the shared namespace by using a cross-namespace access mechanism.
 
-This is a targeted solution brief, not a HashiCorp validated pattern. It describes the proposed operating model and technical shape for a specific customer scenario.
+This is a targeted solution brief, not a HashiCorp validated pattern. It describes the proposed operating model and technical shape for specific scenarios.
 
 ## Proposed architecture
 
 The proposed architecture uses fewer shared LDAP mounts than tenant namespaces.
 
 - Shared namespace:
-  - `ldap-shared`
+  - `ns-central`
 
-- Shared LDAP mounts in `ldap-shared`:
+- Shared LDAP mounts in `ns-central`:
   - `ldap-engineering/`
   - `ldap-sharedservices/`
 
@@ -108,7 +110,7 @@ flowchart LR
       end
     end
 
-    subgraph ldapShared["**Shared namespace: ldap-shared**"]
+    subgraph ldapShared["**Shared namespace: ns-central**"]
       direction TB
       engGroup["**Engineering entity group**<br/>policy grants on ldap-engineering/"]
       svcGroup["**Shared services entity group**<br/>policy grants on ldap-sharedservices/"]
@@ -178,7 +180,7 @@ flowchart LR
 
 The customer already has a centralized operating model for service account management. The same principle should apply inside Vault.
 
-You should place the LDAP secrets engine mounts in `ldap-shared` because:
+You should place the LDAP secrets engine mounts in `ns-central` because:
 
 - the LDAP connection configuration is shared infrastructure, not tenant-local configuration
 - service account lifecycle is centrally owned
@@ -198,7 +200,7 @@ That is why the example uses:
 
 This keeps the architecture aligned to directory ownership and avoids overfitting the mount layout to the namespace count. If the customer later adds more centrally managed directories, you can add more shared mounts without changing the overall operating pattern.
 
-## How entity aliases in tenant namespaces map to shared access in `ldap-shared`
+## How entity aliases in tenant namespaces map to shared access in `ns-central`
 
 The primary cross-namespace mechanism is still `group_policy_application_mode=any`, but the runtime flow is easier to understand when you describe the identity path explicitly.
 
@@ -206,13 +208,13 @@ The request flow can be summarized as follows:
 
 1. An app or user authenticates to the tenant auth method in its own namespace, for example `ns-engineering-1`.
 2. That auth flow resolves or creates an entity alias for the caller in the tenant namespace.
-3. The entity alias maps to an entity group in `ldap-shared`.
-4. The entity group in `ldap-shared` carries the shared access policy for the appropriate LDAP mount and role paths.
+3. The entity alias maps to an entity group in `ns-central`.
+4. The entity group in `ns-central` carries the shared access policy for the appropriate LDAP mount and role paths.
 5. The caller requests credentials from the shared namespace.
 6. Because `group_policy_application_mode=any` is enabled, the token issued in the tenant namespace can use the shared group policy when calling the shared LDAP mount.
 7. The shared LDAP mount manages the service account in OpenLDAP through the delegated bind account and the Vault-managed OU.
 
-This gives you a clearer story than simply saying that a token “targets `ldap-shared`.” The important thing is that the tenant-side identity resolves into shared authorization owned in `ldap-shared`.
+This gives you a clearer story than simply saying that a token “targets `ns-central`.” The important thing is that the tenant-side identity resolves into shared authorization owned in `ns-central`.
 
 ## OpenLDAP directory layout and delegated administration
 
@@ -293,8 +295,8 @@ Example engineering flow:
 
 1. An app or user for `ns-engineering-1` authenticates to the tenant auth method in `ns-engineering-1`.
 2. Vault creates or resolves an entity alias for that caller in `ns-engineering-1`.
-3. That alias maps to an entity group in `ldap-shared` that carries the engineering shared-access policy.
-4. The caller requests service account credentials associated with the engineering mount from the `ldap-shared` namespace.
+3. That alias maps to an entity group in `ns-central` that carries the engineering shared-access policy.
+4. The caller requests service account credentials associated with the engineering mount from the `ns-central` namespace.
 5. One direct example role path is:
 
    ```text
@@ -368,7 +370,7 @@ The Vault team owns the shared service boundary.
 
 That means the Vault team owns:
 
-- the `ldap-shared` namespace
+- the `ns-central` namespace
 - the shared LDAP mounts
 - shared access policies
 - tenant configuration management
