@@ -204,9 +204,10 @@ userPassword: {password}
          "ldapadd", "-Y", "EXTERNAL", "-H", "ldapi:///"],
         input=add_ldif, capture_output=True, text=True,
     )
-    if result.returncode != 0 and "Already exists" not in result.stderr:
-        # If it already exists, reset the password instead
-        if "already exists" in result.stderr.lower():
+    if result.returncode != 0:
+        stderr_lower = result.stderr.lower()
+        # If it already exists (case-insensitive), reset the password instead
+        if "already exists" in stderr_lower:
             reset_ldap_account_password(cn, password, dn=dn)
         else:
             raise RuntimeError(f"Failed to create LDAP service account {cn}: {result.stderr}")
