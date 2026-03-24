@@ -42,7 +42,7 @@ vault write ldap/config \
     userattr="cn" >/dev/null 2>&1
 
 # Clean any leftover roles
-for role in svc-account-1 svc-account-2 svc-account-1-policy org/dev org/platform/sre; do
+for role in svc-account-1 svc-account-2 svc-account-3 svc-account-1-policy org/dev org/platform/sre; do
     vault delete "ldap/static-role/${role}" 2>/dev/null || true
 done
 vault write ldap/config password_policy="" 2>/dev/null || true

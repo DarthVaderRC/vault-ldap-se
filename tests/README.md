@@ -4,7 +4,7 @@ This directory contains the automated validation for the Vault LDAP Secrets Engi
 
 See the root [README](../README.md) for environment setup, demo usage, and architecture. This file keeps the detailed per-file test breakdown close to the tests themselves.
 
-**40 tests** across 7 files, organized by feature area. All tests use `pytest` with the `hvac` Python client and verify results against both the Vault API and the live OpenLDAP directory.
+**41 tests** across 7 files, organized by feature area. All tests use `pytest` with the `hvac` Python client and verify results against both the Vault API and the live OpenLDAP directory.
 
 ## `test_01_setup.py` — Engine Setup & Root Rotation (6 tests)
 
@@ -17,7 +17,7 @@ See the root [README](../README.md) for environment setup, demo usage, and archi
 | `test_scheduled_root_rotation_enterprise` | Enterprise: `rotation_schedule` cron expression accepted |
 | `test_disable_automated_rotation_enterprise` | Enterprise: `disable_automated_rotation` toggle works |
 
-## `test_03_static_roles.py` — Static Roles (11 tests)
+## `test_03_static_roles.py` — Static Roles (12 tests)
 
 | Test | What It Verifies |
 |---|---|
@@ -30,6 +30,7 @@ See the root [README](../README.md) for environment setup, demo usage, and archi
 | `test_manual_rotation` | `POST ldap/rotate-role/svc-account-1` changes the password |
 | `test_last_password_field` | `last_password` is populated after rotation |
 | `test_auto_rotation_short_period` | 10s `rotation_period` triggers automatic rotation |
+| `test_nested_service_account_static_role_rotation` | Static role for `svc-account-3` under `ou=engineering,ou=ServiceAccounts,...` can be created, read, and rotated while `userdn` stays at `ou=ServiceAccounts,...` |
 | `test_skip_import_rotation` | `skip_import_rotation=true` prevents initial password change |
 | `test_cleanup_primary_static_role` | Cleanup for downstream tests |
 

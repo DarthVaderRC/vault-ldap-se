@@ -22,6 +22,7 @@ LDAP_ADMIN_DN = "cn=admin,dc=hashicups,dc=local"
 LDAP_ADMIN_PASSWORD = "2LearnVault"
 LDAP_BASE_DN = "dc=hashicups,dc=local"
 LDAP_SERVICE_ACCOUNTS_DN = "ou=ServiceAccounts,dc=hashicups,dc=local"
+LDAP_ENGINEERING_SERVICE_ACCOUNTS_DN = f"ou=engineering,{LDAP_SERVICE_ACCOUNTS_DN}"
 
 MOUNT_POINT = "ldap"
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -137,6 +138,11 @@ def ldap_entry_exists(cn, base=None):
     return f"cn: {cn}" in output
 
 
+def service_account_dn(cn, parent_dn=LDAP_SERVICE_ACCOUNTS_DN):
+    """Build the DN for a service account entry under the given parent OU."""
+    return f"cn={cn},{parent_dn}"
+
+
 def wait_for_condition(condition_fn, timeout=30, interval=2, msg="Condition"):
     """Poll until condition_fn returns True or timeout."""
     deadline = time.time() + timeout
@@ -147,14 +153,16 @@ def wait_for_condition(condition_fn, timeout=30, interval=2, msg="Condition"):
     raise TimeoutError(f"{msg} not met within {timeout}s")
 
 
-def reset_ldap_account_password(cn, new_password):
+def reset_ldap_account_password(cn, new_password, dn=None, parent_dn=LDAP_SERVICE_ACCOUNTS_DN):
     """Reset an LDAP account password using docker exec.
     For the admin account, the DN is cn=admin,dc=hashicups,dc=local (not under ou=ServiceAccounts).
     """
-    if cn == "admin":
-        target_dn = f"cn=admin,dc=hashicups,dc=local"
+    if dn:
+        target_dn = dn
+    elif cn == "admin":
+        target_dn = LDAP_ADMIN_DN
     else:
-        target_dn = f"cn={cn},ou=ServiceAccounts,dc=hashicups,dc=local"
+        target_dn = service_account_dn(cn, parent_dn=parent_dn)
 
     # Use ldappasswd as the current admin (which Vault controls after rotation)
     # We use docker exec with ldapmodify to reset the password internally
@@ -171,9 +179,9 @@ userPassword: {new_password}
     )
 
 
-def recreate_service_account(cn, password):
+def recreate_service_account(cn, password, dn=None, parent_dn=LDAP_SERVICE_ACCOUNTS_DN):
     """Delete and recreate an LDAP service account using docker exec (SASL EXTERNAL)."""
-    dn = f"cn={cn},{LDAP_SERVICE_ACCOUNTS_DN}"
+    dn = dn or service_account_dn(cn, parent_dn=parent_dn)
 
     # Delete if exists (ignore errors)
     delete_ldif = f"dn: {dn}\nchangetype: delete\n"
@@ -199,6 +207,6 @@ userPassword: {password}
     if result.returncode != 0 and "Already exists" not in result.stderr:
         # If it already exists, reset the password instead
         if "already exists" in result.stderr.lower():
-            reset_ldap_account_password(cn, password)
+            reset_ldap_account_password(cn, password, dn=dn)
         else:
             raise RuntimeError(f"Failed to create LDAP service account {cn}: {result.stderr}")

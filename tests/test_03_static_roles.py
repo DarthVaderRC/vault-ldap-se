@@ -16,11 +16,13 @@ import time
 import pytest
 
 from conftest import (
+    LDAP_ENGINEERING_SERVICE_ACCOUNTS_DN,
     LDAP_HOST_URL,
     LDAP_SERVICE_ACCOUNTS_DN,
     MOUNT_POINT,
     ldap_bind_check,
     recreate_service_account,
+    service_account_dn,
     wait_for_condition,
 )
 
@@ -160,6 +162,59 @@ class TestStaticRoleRotation:
 
         # Cleanup
         vault_client.delete(f"{MOUNT_POINT}/static-role/svc-account-2-autorotate")
+
+
+class TestNestedStaticRoleCoverage:
+    """Test static role behavior for an account nested under the configured userdn subtree."""
+
+    def test_nested_service_account_static_role_rotation(self, vault_client, ensure_ldap_engine):
+        """Create/read/rotate a static role for svc-account-3 under engineering OU."""
+        role_name = "svc-account-3"
+        nested_parent_dn = LDAP_ENGINEERING_SERVICE_ACCOUNTS_DN
+        nested_dn = service_account_dn("svc-account-3", parent_dn=nested_parent_dn)
+
+        recreate_service_account(
+            "svc-account-3",
+            "svcaccount3password",
+            parent_dn=nested_parent_dn,
+        )
+
+        try:
+            vault_client.write(
+                f"{MOUNT_POINT}/static-role/{role_name}",
+                dn=nested_dn,
+                username="svc-account-3",
+                rotation_period="24h",
+            )
+
+            role = vault_client.read(f"{MOUNT_POINT}/static-role/{role_name}")
+            assert role is not None
+            assert role["data"]["username"] == "svc-account-3"
+            assert role["data"]["dn"] == nested_dn
+
+            cred_resp = vault_client.read(f"{MOUNT_POINT}/static-cred/{role_name}")
+            assert cred_resp is not None
+            initial_password = cred_resp["data"]["password"]
+            assert cred_resp["data"]["username"] == "svc-account-3"
+            assert initial_password
+            assert ldap_bind_check(nested_dn, initial_password, url=LDAP_HOST_URL), \
+                "Nested static credential should work for LDAP bind"
+
+            vault_client.write(f"{MOUNT_POINT}/rotate-role/{role_name}")
+            wait_for_condition(
+                lambda: vault_client.read(f"{MOUNT_POINT}/static-cred/{role_name}")["data"]["password"] != initial_password,
+                timeout=30,
+                interval=2,
+                msg="Nested static role password rotation",
+            )
+
+            rotated_password = vault_client.read(f"{MOUNT_POINT}/static-cred/{role_name}")["data"]["password"]
+            assert ldap_bind_check(nested_dn, rotated_password, url=LDAP_HOST_URL), \
+                "Rotated nested static credential should work for LDAP bind"
+            assert not ldap_bind_check(nested_dn, initial_password, url=LDAP_HOST_URL), \
+                "Old nested static credential should fail after rotation"
+        finally:
+            vault_client.delete(f"{MOUNT_POINT}/static-role/{role_name}")
 
 
 class TestSkipImportRotation:
