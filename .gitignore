@@ -4,4 +4,4 @@ __pycache__/
 *.egg-info/
 .env
 .DS_Store
-./designs/ldap-secret-engine-design.drawio
+*.drawio
