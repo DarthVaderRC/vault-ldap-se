@@ -6,3 +6,6 @@ __pycache__/
 .DS_Store
 *.drawio
 designs/ldap-secret-engine-design.drawio
+designs/service-account-management-solution-with-hashicorp-vault.docx
+designs/service-account-management-solution-with-hashicorp-vault.pptx
+designs/pptx/
