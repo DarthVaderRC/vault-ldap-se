@@ -1,4 +1,4 @@
-# OpenLDAP service account management with Vault namespaces
+# OpenLDAP service account credential management with HashiCorp Vault
 
 *A Strategic Guide to Optimizing LDAP Secrets Engine Design that aligns with your organizational boundaries*
 
