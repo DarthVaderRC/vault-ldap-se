@@ -79,10 +79,14 @@ run_cmd() {
     printf '\n'
 }
 
-ORIGINAL_GROUP_POLICY_MODE="$(
-    vault read -format=json sys/config/group-policy-application 2>/dev/null | \
-        jq -r '.data.group_policy_application_mode // "within_namespace_hierarchy"'
-)"
+if GROUP_POLICY_CONFIG_JSON="$(vault read -format=json sys/config/group-policy-application 2>/dev/null)"; then
+    ORIGINAL_GROUP_POLICY_MODE="$(
+        printf '%s\n' "${GROUP_POLICY_CONFIG_JSON}" | \
+            jq -r '.data.group_policy_application_mode // "within_namespace_hierarchy"'
+    )"
+else
+    ORIGINAL_GROUP_POLICY_MODE="within_namespace_hierarchy"
+fi
 GROUP_POLICY_MODE_CHANGED=false
 
 clear || true
