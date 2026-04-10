@@ -1,0 +1,33 @@
+dn: dc=engineering,dc=hashicups,dc=local
+objectClass: domain
+objectClass: top
+dc: engineering
+
+dn: ou=delegated-admin,dc=engineering,dc=hashicups,dc=local
+objectClass: organizationalUnit
+objectClass: top
+ou: delegated-admin
+
+dn: cn=vault-bind,ou=delegated-admin,dc=engineering,dc=hashicups,dc=local
+objectClass: person
+objectClass: top
+cn: vault-bind
+sn: vault-bind
+userPassword: VaultBindEngineering!1
+
+dn: ou=ServiceAccounts,dc=engineering,dc=hashicups,dc=local
+objectClass: organizationalUnit
+objectClass: top
+ou: ServiceAccounts
+
+dn: ou=vault,ou=ServiceAccounts,dc=engineering,dc=hashicups,dc=local
+objectClass: organizationalUnit
+objectClass: top
+ou: vault
+
+dn: cn=svc-app1,ou=vault,ou=ServiceAccounts,dc=engineering,dc=hashicups,dc=local
+objectClass: person
+objectClass: top
+cn: svc-app1
+sn: svc-app1
+userPassword: svcapp1initialpassword
