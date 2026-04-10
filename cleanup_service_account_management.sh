@@ -50,14 +50,15 @@ if docker inspect "${CONTAINER_NAME}" >/dev/null 2>&1; then
 fi
 
 if [ -n "${RESTORE_GROUP_POLICY_MODE}" ]; then
-    CURRENT_MODE="$(
+    if CURRENT_MODE="$(
         vault read -format=json sys/config/group-policy-application 2>/dev/null | \
             jq -r '.data.group_policy_application_mode // empty'
-    )"
-    if [ -n "${CURRENT_MODE}" ] && [ "${CURRENT_MODE}" != "${RESTORE_GROUP_POLICY_MODE}" ]; then
-        vault write sys/config/group-policy-application \
-            group_policy_application_mode="${RESTORE_GROUP_POLICY_MODE}" >/dev/null
-        echo "Restored group policy application mode to ${RESTORE_GROUP_POLICY_MODE}."
+    )"; then
+        if [ -n "${CURRENT_MODE}" ] && [ "${CURRENT_MODE}" != "${RESTORE_GROUP_POLICY_MODE}" ]; then
+            vault write sys/config/group-policy-application \
+                group_policy_application_mode="${RESTORE_GROUP_POLICY_MODE}" >/dev/null
+            echo "Restored group policy application mode to ${RESTORE_GROUP_POLICY_MODE}."
+        fi
     fi
 fi
 
