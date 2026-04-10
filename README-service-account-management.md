@@ -109,5 +109,5 @@ To clean up afterward:
 ## Notes
 
 - The demo reuses the existing OpenLDAP container so it does not create a second directory service.
-- Cleanup removes the demo namespace resources and the dedicated LDAP branch, but it does not rewrite global OpenLDAP ACL ordering. The delegated-bind ACL entries are additive and remain narrowly scoped to the removed branch.
+- Setup adds delegated-bind `olcAccess` entries for the demo branch and may insert them near the top of the global OpenLDAP ACL list, which can change ACL ordering. Cleanup removes the demo namespace resources and the dedicated LDAP branch, but it does not restore the pre-demo global ACL order. The delegated-bind ACL entries are intended to be additive and narrowly scoped to the demo branch.
 - If your Vault cluster already uses a non-default group policy mode, the demo restores the original value when it performs its own cleanup in the same run.
