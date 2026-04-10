@@ -3,6 +3,7 @@ set -euo pipefail
 
 export VAULT_ADDR="${VAULT_ADDR:-http://127.0.0.1:8200}"
 export VAULT_TOKEN="${VAULT_TOKEN:?VAULT_TOKEN must be set}"
+unset VAULT_NAMESPACE
 
 CONTAINER_NAME="${SAM_OPENLDAP_CONTAINER:-vault-ldap-openldap}"
 CENTRAL_NAMESPACE="${SAM_CENTRAL_NAMESPACE:-ns-central}"
