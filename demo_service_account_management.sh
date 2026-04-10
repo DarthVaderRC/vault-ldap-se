@@ -131,13 +131,16 @@ run_cmd "VAULT_NAMESPACE=\"${CENTRAL_NAMESPACE}\" vault list ${SHARED_MOUNT}/sta
 run_cmd "VAULT_NAMESPACE=\"${CENTRAL_NAMESPACE}\" vault read ${SHARED_MOUNT}/static-role/${ROLE_PATH}"
 pause
 
+ENTITY_NAME="${SAM_ENTITY_NAME:-ns-engineering-1-demo-user}"
+GROUP_NAME="${SAM_GROUP_NAME:-engineering-static-consumers}"
+
 section "3. Show the identity bridge"
 subsection "Tenant auth method and entity alias"
 run_cmd "VAULT_NAMESPACE=\"${TENANT_NAMESPACE}\" vault auth list"
-run_cmd "VAULT_NAMESPACE=\"${TENANT_NAMESPACE}\" vault read identity/entity/name/ns-engineering-1-demo-user"
+run_cmd "VAULT_NAMESPACE=\"${TENANT_NAMESPACE}\" vault read identity/entity/name/${ENTITY_NAME}"
 
 subsection "Shared group in ${CENTRAL_NAMESPACE}"
-run_cmd "VAULT_NAMESPACE=\"${CENTRAL_NAMESPACE}\" vault read identity/group/name/engineering-static-consumers"
+run_cmd "VAULT_NAMESPACE=\"${CENTRAL_NAMESPACE}\" vault read identity/group/name/${GROUP_NAME}"
 info "The group policy lives in ${CENTRAL_NAMESPACE}, but its member entity lives in ${TENANT_NAMESPACE}."
 pause
 
