@@ -27,7 +27,7 @@ bash setup/02_ldap_engine_config.sh
 - The main demo/test track is `setup/00_openldap_setup.sh` -> `setup/01_vault_policy_setup.sh` -> `setup/02_ldap_engine_config.sh` -> `demo.sh` / `run_tests.sh`. In that track, Vault mounts the engine at `ldap/`, manages static roles, dynamic roles, service-account library sets, hierarchical paths, and password policies, and the tests verify both Vault API responses and the live LDAP directory.
 - The Python test suite (`tests/` + `tests/conftest.py`) uses `hvac` for Vault API calls and also performs direct LDAP verification. Host-side checks bind to `ldap://127.0.0.1`, while administrative LDAP reads and writes run inside the container with `docker exec ... ldapsearch|ldapmodify -Y EXTERNAL -H ldapi:///`.
 - `demo_service_account_management.sh` is a separate, narrower demo track. It reuses the same OpenLDAP container but adds a Vault Enterprise namespace topology: `ns-central` hosts a shared LDAP mount (`ldap-engineering/`), `ns-engineering-1` hosts the tenant auth path, and an identity group in `ns-central` grants a tenant token cross-namespace access to a hierarchical static role.
-- `perf-replication/` is a separate benchmarking area and is not part of the normal demo or pytest flow.
+- Performance-replication experiments and historical `output/` artifacts were moved to the sibling folder `/Users/dineshgawande/Documents/code/vault-lab-sandbox`; they are no longer part of this repository's normal demo or pytest flow.
 
 ## Key conventions
 
