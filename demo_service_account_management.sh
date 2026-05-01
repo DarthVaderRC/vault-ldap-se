@@ -76,7 +76,7 @@ pause() {
 
 run_cmd() {
     printf '  $ %s\n' "$*"
-    eval "$@"
+    "$@"
     printf '\n'
 }
 
