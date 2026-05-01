@@ -59,7 +59,9 @@ VAULT_NAMESPACE="${TENANT_NAMESPACE}" vault write identity/entity-alias \
     mount_accessor="${USERPASS_ACCESSOR}" >/dev/null
 
 echo "Creating shared LDAP mount and policy in ${CENTRAL_NAMESPACE}..."
-VAULT_NAMESPACE="${CENTRAL_NAMESPACE}" vault secrets enable -path="${SHARED_MOUNT}" ldap >/dev/null
+if ! VAULT_NAMESPACE="${CENTRAL_NAMESPACE}" vault secrets list -format=json | jq -e --arg mount "${SHARED_MOUNT}/" 'has($mount)' >/dev/null; then
+    VAULT_NAMESPACE="${CENTRAL_NAMESPACE}" vault secrets enable -path="${SHARED_MOUNT}" ldap >/dev/null
+fi
 VAULT_NAMESPACE="${CENTRAL_NAMESPACE}" vault write "${SHARED_MOUNT}/config" \
     binddn="${LDAP_BIND_DN}" \
     bindpass="${LDAP_BIND_PASS}" \
