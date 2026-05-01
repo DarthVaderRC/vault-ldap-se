@@ -378,10 +378,10 @@ A few operational considerations are worth calling out:
 - [LDAP hierarchical paths documentation](https://developer.hashicorp.com/vault/docs/secrets/ldap#hierarchical-paths)
 - [Vault namespace structuring guidance](https://developer.hashicorp.com/vault/tutorials/enterprise/namespace-structure)
 - [Configure cross-namespace access with group policy application](https://developer.hashicorp.com/vault/docs/enterprise/namespaces/configure-cross-namespace-access)
+- [Vault Enterprise Operating Guide: People and Process](https://developer.hashicorp.com/validated-designs/vault-operating-guides-adoption/people-and-process)
+- [Vault Enterprise Operating Guide: Organisational Concepts](https://developer.hashicorp.com/validated-designs/vault-operating-guides-adoption/vault-organizational-concepts)
+- [Vault Enterprise Operating Guide: Standard Operating Procedures](https://developer.hashicorp.com/validated-designs/vault-operating-guides-adoption/standard-operational-procedures)
 
 ## Conclusion
 
 This solution keeps the LDAP backend shared and governed at the right administrative boundary, while still letting multiple tenant namespaces consume the service cleanly. The broader point is more durable than the example - many namespaces can consume one shared LDAP mount when the directory boundary, delegated administration model, identity mapping, and hierarchical naming convention are designed well, and when the mount placement follows actual ownership instead of namespace count alone.
-- [Vault Enterprise Operating Guide: People and Process](https://developer.hashicorp.com/validated-designs/vault-operating-guides-adoption/people-and-process)
-- [Vault Enterprise Operating Guide: Organisational Concepts](https://developer.hashicorp.com/validated-designs/vault-operating-guides-adoption/vault-organizational-concepts)
-- [Vault Enterprise Operating Guide: Standard Operating Procedures](https://developer.hashicorp.com/validated-designs/vault-operating-guides-adoption/standard-operational-procedures)
