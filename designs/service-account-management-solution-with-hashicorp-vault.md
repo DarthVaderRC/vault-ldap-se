@@ -384,4 +384,4 @@ A few operational considerations are worth calling out:
 
 ## Conclusion
 
-This solution keeps the LDAP backend shared and governed at the right administrative boundary, while still letting multiple tenant namespaces consume the service cleanly. The broader point is more durable than the example - many namespaces can consume one shared LDAP mount when the directory boundary, delegated administration model, identity mapping, and hierarchical naming convention are designed well, and when the mount placement follows actual ownership instead of namespace count alone.
+This solution keeps the LDAP backend shared and governed at the right administrative boundary, while still letting multiple tenant namespaces consume the service cleanly. The broader point is more durable than the example: many namespaces can consume one shared LDAP mount when the directory boundary, delegated administration model, identity mapping, and hierarchical naming convention are designed well, and when the mount placement follows actual ownership instead of namespace count alone.
