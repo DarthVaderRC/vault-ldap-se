@@ -1,4 +1,4 @@
-# Shared OpenLDAP service account management with Vault namespaces
+# OpenLDAP service account credential management with HashiCorp Vault
 
 *A Strategic Guide to Optimizing LDAP Secrets Engine Design that aligns with your organizational boundaries*
 
@@ -211,7 +211,7 @@ flowchart LR
   class eng1Actor,eng2Actor,svc1Actor,svc2Actor actor;
 ```
 
-## Why a shared administrative boundary is the right default
+## Shared administrative boundary
 
 The customer already has a centralized operating model for service account management. The same principle should apply inside Vault.
 
@@ -224,9 +224,9 @@ You should start with shared LDAP secrets engine mounts rather than tenant-local
 
 In this specific scenario, that shared administrative boundary is `ns-central`. In other environments, that same logic may point to a business-unit namespace instead. The goal is not “one mount per tenant namespace.” The goal is “one shared mount per real administrative boundary.” That is why multiple engineering namespaces consume `ldap-engineering/`, and multiple shared-services namespaces consume `ldap-sharedservices/`.
 
-## How entity aliases in tenant namespaces map to shared access in `ns-central`
+## Cross namespace access
 
-The primary cross-namespace mechanism is still `group_policy_application_mode=any`, but the runtime flow is easier to understand when you describe the identity path explicitly.
+The primary [cross-namespace mechanism](https://developer.hashicorp.com/vault/docs/enterprise/namespaces/configure-cross-namespace-access) is still `group_policy_application_mode=any`, but the runtime flow is easier to understand when you describe the identity path explicitly.
 
 The request flow can be summarized as follows:
 
@@ -240,7 +240,7 @@ The request flow can be summarized as follows:
 
 The important thing is that the tenant-side identity resolves into shared authorization owned in `ns-central`. For example, an engineering caller might read `ldap-engineering/static-cred/ns-engineering-1/team1/app1/static/svc-account-1` once its tenant identity resolves into the shared engineering group.
 
-## OpenLDAP directory layout and delegated administration
+## OpenLDAP layout and delegation
 
 The OpenLDAP layout should make a clear separation between:
 
@@ -274,9 +274,9 @@ This architecture also has a few design implications for the LDAP secrets engine
 - the bind DN stays delegated and narrowly privileged
 - once a mount is configured, Vault should rotate the bind DN credential with `rotate-root` so that only Vault knows the password
 
-## Hierarchical paths convention for roles on the shared mounts
+## LDAP role naming convention
 
-Each shared mount should use hierarchical paths for role names so that one mount can safely serve several tenant namespaces and several teams within those namespaces.
+The LDAP secrets plugin lets you define role and set names that contain an arbitrary number of forward slashes. Names with forward slashes define [hierarchical path structures](https://developer.hashicorp.com/vault/docs/secrets/ldap#hierarchical-paths). Each shared mount should use hierarchical paths for role names so that one mount can safely serve several tenant namespaces and several teams within those namespaces.
 
 For example, use a naming pattern like:
 
@@ -306,7 +306,7 @@ The API prefix differs by role family, but the hierarchical name stays consisten
 | `ns-engineering-1` | `ldap-engineering/` | `ldap-engineering/static-role/ns-engineering-1/team1/app1/static/svc-account-1` | `ldap-engineering/library/ns-engineering-1/team1/app1/library/pool1` | `ldap-engineering/role/ns-engineering-1/team1/app1/dynamic/dynrole1` |
 | `ns-shared-services-1` | `ldap-sharedservices/` | `ldap-sharedservices/static-role/ns-shared-services-1/team1/app1/static/svc-account-1` | `ldap-sharedservices/library/ns-shared-services-1/team1/app1/library/pool1` | `ldap-sharedservices/role/ns-shared-services-1/team1/app1/dynamic/dynrole1` |
 
-## When to use static, library, and dynamic roles
+## Role type selection criteria
 
 All three role families are useful in this design.
 
@@ -382,3 +382,6 @@ A few operational considerations are worth calling out:
 ## Conclusion
 
 This solution keeps the LDAP backend shared and governed at the right administrative boundary, while still letting multiple tenant namespaces consume the service cleanly. The broader point is more durable than the example - many namespaces can consume one shared LDAP mount when the directory boundary, delegated administration model, identity mapping, and hierarchical naming convention are designed well, and when the mount placement follows actual ownership instead of namespace count alone.
+- [Vault Enterprise Operating Guide: People and Process](https://developer.hashicorp.com/validated-designs/vault-operating-guides-adoption/people-and-process)
+- [Vault Enterprise Operating Guide: Organisational Concepts](https://developer.hashicorp.com/validated-designs/vault-operating-guides-adoption/vault-organizational-concepts)
+- [Vault Enterprise Operating Guide: Standard Operating Procedures](https://developer.hashicorp.com/validated-designs/vault-operating-guides-adoption/standard-operational-procedures)

@@ -23,13 +23,18 @@ A comprehensive demonstration of **every feature** of HashiCorp Vault's [LDAP Se
 ```
 vault-ldap-se/
 ├── demo.sh                              # Interactive customer demo script
+├── demo_service_account_management.sh   # Focused cross-namespace architecture demo
 ├── run_tests.sh                         # Pytest runner with state reset
 ├── cleanup.sh                           # Tear down all resources
+├── cleanup_service_account_management.sh # Remove focused architecture demo resources
+├── README-service-account-management.md # Dedicated guide for the focused design demo
 ├── requirements.txt                     # Python dependencies
 ├── setup/
 │   ├── 00_openldap_setup.sh             # OpenLDAP Docker container + data
 │   ├── 01_vault_policy_setup.sh         # Vault admin policy & token
 │   ├── 02_ldap_engine_config.sh         # Enable & configure LDAP engine
+│   ├── 03_service_account_management_openldap.sh # Seed dedicated LDAP branch for the design demo
+│   ├── 04_service_account_management_vault.sh # Configure namespaces, identity, and shared mount
 │   ├── ldifs/
 │   │   ├── base.ldif                    # Base OUs (service accounts, groups, engineering child OU)
 │   │   ├── seed_entries.ldif            # svc-account-1, svc-account-2, nested svc-account-3, ldapviewer + dev/ops groups
@@ -37,6 +42,8 @@ vault-ldap-se/
 │   │   ├── creation.ldif                # Dynamic role creation template
 │   │   ├── deletion.ldif                # Dynamic role deletion template
 │   │   └── rollback.ldif                # Dynamic role rollback template
+│   ├── service_account_management/
+│   │   └── engineering_branch.ldif      # Dedicated LDAP branch for the focused design demo
 │   └── policies/
 │       └── admin-policy.hcl             # Vault policy for demo operations
 ├── assets/
@@ -111,7 +118,17 @@ pip3 install -r requirements.txt
 
 ![phpLDAPadmin browsing the demo LDAP directory](./assets/phpldapadmin-demo.png)
 
-### 4. Or run the automated test suite
+### 4. Or run the focused cross-namespace design demo
+
+If you want a lightweight demonstration of the service-account-management design rather than the full LDAP feature tour, use the dedicated guide:
+
+```bash
+./demo_service_account_management.sh
+```
+
+See [`README-service-account-management.md`](./README-service-account-management.md) for prerequisites, scope, and cleanup details.
+
+### 5. Or run the automated test suite
 
 ```bash
 # Full setup + tests (from scratch)
