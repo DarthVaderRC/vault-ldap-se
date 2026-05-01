@@ -27,6 +27,8 @@ changetype: delete
 EOF
 }
 
+VAULT_NAMESPACE="${CENTRAL_NAMESPACE}" vault lease revoke -prefix "${SHARED_MOUNT}/" >/dev/null 2>&1 || true
+
 if VAULT_NAMESPACE="${CENTRAL_NAMESPACE}" vault secrets disable "${SHARED_MOUNT}/" >/dev/null 2>&1; then
     echo "Disabled ${SHARED_MOUNT}/ in ${CENTRAL_NAMESPACE}."
 fi

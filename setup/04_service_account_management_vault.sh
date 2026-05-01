@@ -34,11 +34,18 @@ fi
 
 echo "=== Preparing Vault Enterprise namespaces for service-account-management demo ==="
 
-vault namespace create "${CENTRAL_NAMESPACE}" >/dev/null
-vault namespace create "${TENANT_NAMESPACE}" >/dev/null
+if ! vault namespace lookup "${CENTRAL_NAMESPACE}" >/dev/null 2>&1; then
+    vault namespace create "${CENTRAL_NAMESPACE}" >/dev/null
+fi
+
+if ! vault namespace lookup "${TENANT_NAMESPACE}" >/dev/null 2>&1; then
+    vault namespace create "${TENANT_NAMESPACE}" >/dev/null
+fi
 
 echo "Creating tenant auth path and entity alias..."
-VAULT_NAMESPACE="${TENANT_NAMESPACE}" vault auth enable userpass >/dev/null
+if ! VAULT_NAMESPACE="${TENANT_NAMESPACE}" vault auth list -format=json | jq -e 'has("userpass/")' >/dev/null; then
+    VAULT_NAMESPACE="${TENANT_NAMESPACE}" vault auth enable userpass >/dev/null
+fi
 VAULT_NAMESPACE="${TENANT_NAMESPACE}" vault write "auth/userpass/users/${DEMO_USER}" password="${DEMO_PASSWORD}" >/dev/null
 USERPASS_ACCESSOR="$(
     VAULT_NAMESPACE="${TENANT_NAMESPACE}" vault auth list -format=json | jq -r '.["userpass/"].accessor'
@@ -52,7 +59,9 @@ VAULT_NAMESPACE="${TENANT_NAMESPACE}" vault write identity/entity-alias \
     mount_accessor="${USERPASS_ACCESSOR}" >/dev/null
 
 echo "Creating shared LDAP mount and policy in ${CENTRAL_NAMESPACE}..."
-VAULT_NAMESPACE="${CENTRAL_NAMESPACE}" vault secrets enable -path="${SHARED_MOUNT}" ldap >/dev/null
+if ! VAULT_NAMESPACE="${CENTRAL_NAMESPACE}" vault secrets list -format=json | jq -e --arg mount "${SHARED_MOUNT}/" 'has($mount)' >/dev/null; then
+    VAULT_NAMESPACE="${CENTRAL_NAMESPACE}" vault secrets enable -path="${SHARED_MOUNT}" ldap >/dev/null
+fi
 VAULT_NAMESPACE="${CENTRAL_NAMESPACE}" vault write "${SHARED_MOUNT}/config" \
     binddn="${LDAP_BIND_DN}" \
     bindpass="${LDAP_BIND_PASS}" \
