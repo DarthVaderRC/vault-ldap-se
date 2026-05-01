@@ -61,10 +61,10 @@ if ! grep -Fq "${LDAP_BIND_DN}" <<<"${ACCESS_DUMP}"; then
 dn: olcDatabase={1}mdb,cn=config
 changetype: modify
 add: olcAccess
-olcAccess: to dn.subtree="${LDAP_USERDN}" attrs=userPassword by dn.exact="${LDAP_BIND_DN}" write by self write by anonymous auth by * none
+olcAccess: {0}to dn.subtree="${LDAP_USERDN}" attrs=userPassword by dn.exact="${LDAP_BIND_DN}" write by self write by anonymous auth by * none
 -
 add: olcAccess
-olcAccess: to dn.subtree="${LDAP_USERDN}" by dn.exact="${LDAP_BIND_DN}" read by * none
+olcAccess: {1}to dn.subtree="${LDAP_USERDN}" by dn.exact="${LDAP_BIND_DN}" read by * none
 EOF
     )"
     ACL_STATUS=$?
