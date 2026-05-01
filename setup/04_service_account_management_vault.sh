@@ -34,8 +34,13 @@ fi
 
 echo "=== Preparing Vault Enterprise namespaces for service-account-management demo ==="
 
-vault namespace create "${CENTRAL_NAMESPACE}" >/dev/null
-vault namespace create "${TENANT_NAMESPACE}" >/dev/null
+if ! vault namespace lookup "${CENTRAL_NAMESPACE}" >/dev/null 2>&1; then
+    vault namespace create "${CENTRAL_NAMESPACE}" >/dev/null
+fi
+
+if ! vault namespace lookup "${TENANT_NAMESPACE}" >/dev/null 2>&1; then
+    vault namespace create "${TENANT_NAMESPACE}" >/dev/null
+fi
 
 echo "Creating tenant auth path and entity alias..."
 VAULT_NAMESPACE="${TENANT_NAMESPACE}" vault auth enable userpass >/dev/null
