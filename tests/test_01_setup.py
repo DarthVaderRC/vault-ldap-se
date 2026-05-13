@@ -11,17 +11,12 @@ Covers:
 """
 import time
 
-import pytest
-
 from conftest import (
     LDAP_ADMIN_DN,
     LDAP_ADMIN_PASSWORD,
-    LDAP_HOST_URL,
     LDAP_URL,
     LDAP_SERVICE_ACCOUNTS_DN,
     MOUNT_POINT,
-    OPENLDAP_IP,
-    ldap_bind_check,
     reset_ldap_account_password,
 )
 

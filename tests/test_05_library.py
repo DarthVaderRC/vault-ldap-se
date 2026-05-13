@@ -12,16 +12,16 @@ Covers:
 - Listing library sets
 - Deleting library sets
 """
+from contextlib import suppress
 import time
 
 import pytest
 
 from conftest import (
-    LDAP_HOST_URL,
-    LDAP_SERVICE_ACCOUNTS_DN,
     MOUNT_POINT,
     ldap_bind_check,
     recreate_service_account,
+    service_account_dn,
 )
 
 
@@ -40,17 +40,13 @@ def library_set(vault_client, ensure_ldap_engine):
     )
     yield "svc-team"
     # Force check-in all accounts then delete
-    try:
+    with suppress(Exception):
         vault_client.write(
             f"{MOUNT_POINT}/library/manage/svc-team/check-in",
             service_account_names=["svc-library-1", "svc-library-2"],
         )
-    except Exception:
-        pass
-    try:
+    with suppress(Exception):
         vault_client.delete(f"{MOUNT_POINT}/library/svc-team")
-    except Exception:
-        pass
 
 
 class TestLibrarySetCRUD:
@@ -96,13 +92,13 @@ class TestServiceAccountCheckout:
         assert "service_account_name" in data
         account = data["service_account_name"]
         password = data["password"]
-        assert account in ["svc-library-1", "svc-library-2"]
+        assert account in {"svc-library-1", "svc-library-2"}
         assert len(password) > 0
 
         # Verify LDAP bind
-        dn = f"cn={account},ou=ServiceAccounts,dc=hashicups,dc=local"
-        assert ldap_bind_check(dn, password), \
-            f"Checked-out credential should work for LDAP bind on {dn}"
+        account_dn = service_account_dn(account)
+        assert ldap_bind_check(account_dn, password), \
+            f"Checked-out credential should work for LDAP bind on {account_dn}"
 
         # Check status — account should be unavailable
         status = vault_client.read(f"{MOUNT_POINT}/library/{library_set}/status")

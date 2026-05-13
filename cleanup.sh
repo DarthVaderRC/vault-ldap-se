@@ -20,6 +20,30 @@ export VAULT_TOKEN="${VAULT_TOKEN:?VAULT_TOKEN must be set}"
 CONTAINER_NAME="vault-ldap-openldap"
 PHPLDAPADMIN_CONTAINER_NAME="vault-ldap-phpldapadmin"
 
+done_message() {
+    echo -e "${GREEN}done${NC}"
+}
+
+status_message() {
+    echo -e "${RED}$1${NC}"
+}
+
+delete_password_policy() {
+    vault delete "sys/policies/password/$1" 2>/dev/null || true
+}
+
+remove_container() {
+    local label="$1"
+    local container_name="$2"
+
+    echo -n "  Removing ${label}... "
+    if docker rm -f "${container_name}" >/dev/null 2>&1; then
+        done_message
+    else
+        status_message "not running"
+    fi
+}
+
 echo -e "${CYAN}=== Vault LDAP Secrets Engine Cleanup ===${NC}"
 echo ""
 
@@ -27,46 +51,33 @@ echo ""
 # OpenLDAP has already been removed or credentials were rotated.
 echo -n "  Force revoking LDAP leases... "
 vault lease revoke -force -prefix ldap >/dev/null 2>&1 || true
-echo -e "${GREEN}done${NC}"
+done_message
 
 # Disable LDAP secrets engine
 echo -n "  Disabling LDAP secrets engine... "
 if vault secrets disable ldap/ 2>/dev/null; then
-    echo -e "${GREEN}done${NC}"
+    done_message
 else
-    echo -e "${RED}not mounted${NC}"
+    status_message "not mounted"
 fi
 
 # Remove Vault policies
 echo -n "  Removing ldap-admin policy... "
 if vault policy delete ldap-admin 2>/dev/null; then
-    echo -e "${GREEN}done${NC}"
+    done_message
 else
-    echo -e "${RED}not found${NC}"
+    status_message "not found"
 fi
 
 # Remove password policies
 echo -n "  Removing password policies... "
-vault delete sys/policies/password/ldap-policy 2>/dev/null || true
-vault delete sys/policies/password/ldap-demo-policy 2>/dev/null || true
-vault delete sys/policies/password/ldap-custom-policy 2>/dev/null || true
-echo -e "${GREEN}done${NC}"
+for policy in ldap-policy ldap-demo-policy ldap-custom-policy; do
+    delete_password_policy "${policy}"
+done
+done_message
 
-# Remove OpenLDAP container
-echo -n "  Removing OpenLDAP container... "
-if docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1; then
-    echo -e "${GREEN}done${NC}"
-else
-    echo -e "${RED}not running${NC}"
-fi
-
-# Remove phpLDAPadmin container
-echo -n "  Removing phpLDAPadmin container... "
-if docker rm -f "${PHPLDAPADMIN_CONTAINER_NAME}" >/dev/null 2>&1; then
-    echo -e "${GREEN}done${NC}"
-else
-    echo -e "${RED}not running${NC}"
-fi
+remove_container "OpenLDAP container" "${CONTAINER_NAME}"
+remove_container "phpLDAPadmin container" "${PHPLDAPADMIN_CONTAINER_NAME}"
 
 echo ""
 echo -e "${GREEN}Cleanup complete!${NC}"

@@ -6,6 +6,7 @@ Covers:
 - Listing roles at specific path levels
 - Demonstrating policy-based access scoping with paths
 """
+from contextlib import suppress
 import time
 
 import pytest
@@ -13,7 +14,11 @@ import pytest
 from conftest import (
     MOUNT_POINT,
     recreate_service_account,
+    service_account_dn,
 )
+
+ORG_DEV_DN = service_account_dn("svc-account-1")
+ORG_PLATFORM_SRE_DN = service_account_dn("svc-account-2")
 
 
 @pytest.fixture(scope="module")
@@ -24,7 +29,7 @@ def hierarchical_roles(vault_client, ensure_ldap_engine):
 
     vault_client.write(
         f"{MOUNT_POINT}/static-role/org/dev",
-        dn="cn=svc-account-1,ou=ServiceAccounts,dc=hashicups,dc=local",
+        dn=ORG_DEV_DN,
         username="svc-account-1",
         rotation_period="24h",
     )
@@ -32,7 +37,7 @@ def hierarchical_roles(vault_client, ensure_ldap_engine):
 
     vault_client.write(
         f"{MOUNT_POINT}/static-role/org/platform/sre",
-        dn="cn=svc-account-2,ou=ServiceAccounts,dc=hashicups,dc=local",
+        dn=ORG_PLATFORM_SRE_DN,
         username="svc-account-2",
         rotation_period="24h",
     )
@@ -41,10 +46,8 @@ def hierarchical_roles(vault_client, ensure_ldap_engine):
 
     # Cleanup
     for role in ["org/dev", "org/platform/sre"]:
-        try:
+        with suppress(Exception):
             vault_client.delete(f"{MOUNT_POINT}/static-role/{role}")
-        except Exception:
-            pass
 
 
 class TestHierarchicalStaticRoles:

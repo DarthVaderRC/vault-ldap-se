@@ -27,27 +27,36 @@ changetype: delete
 EOF
 }
 
+delete_namespace_if_present() {
+    local namespace="$1"
+
+    if vault namespace delete "${namespace}" >/dev/null 2>&1; then
+        echo "Deleted namespace ${namespace}."
+    fi
+}
+
+ldap_entry_dns=(
+    "${LDAP_SERVICE_ACCOUNT_DN}"
+    "${LDAP_VAULT_OU_DN}"
+    "${LDAP_BIND_DN}"
+    "${LDAP_DELEGATED_ADMIN_OU_DN}"
+    "${LDAP_SERVICE_ACCOUNTS_DN}"
+    "${LDAP_BRANCH_DN}"
+)
+
 VAULT_NAMESPACE="${CENTRAL_NAMESPACE}" vault lease revoke -prefix "${SHARED_MOUNT}/" >/dev/null 2>&1 || true
 
 if VAULT_NAMESPACE="${CENTRAL_NAMESPACE}" vault secrets disable "${SHARED_MOUNT}/" >/dev/null 2>&1; then
     echo "Disabled ${SHARED_MOUNT}/ in ${CENTRAL_NAMESPACE}."
 fi
 
-if vault namespace delete "${CENTRAL_NAMESPACE}" >/dev/null 2>&1; then
-    echo "Deleted namespace ${CENTRAL_NAMESPACE}."
-fi
-
-if vault namespace delete "${TENANT_NAMESPACE}" >/dev/null 2>&1; then
-    echo "Deleted namespace ${TENANT_NAMESPACE}."
-fi
+delete_namespace_if_present "${CENTRAL_NAMESPACE}"
+delete_namespace_if_present "${TENANT_NAMESPACE}"
 
 if docker inspect "${CONTAINER_NAME}" >/dev/null 2>&1; then
-    delete_if_present "${LDAP_SERVICE_ACCOUNT_DN}"
-    delete_if_present "${LDAP_VAULT_OU_DN}"
-    delete_if_present "${LDAP_BIND_DN}"
-    delete_if_present "${LDAP_DELEGATED_ADMIN_OU_DN}"
-    delete_if_present "${LDAP_SERVICE_ACCOUNTS_DN}"
-    delete_if_present "${LDAP_BRANCH_DN}"
+    for entry_dn in "${ldap_entry_dns[@]}"; do
+        delete_if_present "${entry_dn}"
+    done
     echo "Removed known LDAP demo entries under ${LDAP_BRANCH_DN}."
 fi
 

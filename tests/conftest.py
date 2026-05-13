@@ -1,7 +1,7 @@
 """
 Pytest configuration and shared fixtures for Vault LDAP Secrets Engine tests.
 """
-import json
+import base64
 import os
 import subprocess
 import time
@@ -20,12 +20,47 @@ VAULT_ROOT_TOKEN = os.environ["VAULT_ROOT_TOKEN"]  # must be set in environment
 OPENLDAP_CONTAINER = "vault-ldap-openldap"
 LDAP_ADMIN_DN = "cn=admin,dc=hashicups,dc=local"
 LDAP_ADMIN_PASSWORD = "2LearnVault"
-LDAP_BASE_DN = "dc=hashicups,dc=local"
 LDAP_SERVICE_ACCOUNTS_DN = "ou=ServiceAccounts,dc=hashicups,dc=local"
 LDAP_ENGINEERING_SERVICE_ACCOUNTS_DN = f"ou=engineering,{LDAP_SERVICE_ACCOUNTS_DN}"
 
 MOUNT_POINT = "ldap"
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def read_ldif_file(filename):
+    """Read an LDIF file and return its base64-encoded content."""
+    path = os.path.join(PROJECT_DIR, "setup", "ldifs", filename)
+    with open(path) as file_handle:
+        return base64.b64encode(file_handle.read().encode()).decode()
+
+
+def _run_openldap_command(*command, input=None, check=False):
+    """Run a command inside the OpenLDAP container."""
+    docker_exec = ["docker", "exec"]
+    if input is not None:
+        docker_exec.append("-i")
+    docker_exec.extend([OPENLDAP_CONTAINER, *command])
+    return subprocess.run(
+        docker_exec,
+        input=input,
+        check=check,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _run_openldap_ldapi_command(tool, *args, input=None, check=False):
+    """Run an ldapi:/// command inside the OpenLDAP container."""
+    return _run_openldap_command(
+        tool,
+        "-Y",
+        "EXTERNAL",
+        "-H",
+        "ldapi:///",
+        *args,
+        input=input,
+        check=check,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -118,16 +153,15 @@ def ldap_bind_check(dn, password, url=None):
         return False
 
 
-def ldap_search(base, search_filter, attrs=None, url=None):
+def ldap_search(base, search_filter, attrs=None):
     """Search LDAP using docker exec (avoids issues with rotated admin password)."""
-    cmd = [
-        "docker", "exec", OPENLDAP_CONTAINER,
-        "ldapsearch", "-Y", "EXTERNAL", "-H", "ldapi:///",
-        "-b", base, search_filter,
-    ]
-    if attrs:
-        cmd.extend(attrs)
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = _run_openldap_ldapi_command(
+        "ldapsearch",
+        "-b",
+        base,
+        search_filter,
+        *(attrs or []),
+    )
     return result.stdout
 
 
@@ -141,6 +175,15 @@ def ldap_entry_exists(cn, base=None):
 def service_account_dn(cn, parent_dn=LDAP_SERVICE_ACCOUNTS_DN):
     """Build the DN for a service account entry under the given parent OU."""
     return f"cn={cn},{parent_dn}"
+
+
+def _resolve_account_dn(cn, dn=None, parent_dn=LDAP_SERVICE_ACCOUNTS_DN):
+    """Resolve an explicit DN or build one from the service account name."""
+    if dn:
+        return dn
+    if cn == "admin":
+        return LDAP_ADMIN_DN
+    return service_account_dn(cn, parent_dn=parent_dn)
 
 
 def wait_for_condition(condition_fn, timeout=30, interval=2, msg="Condition"):
@@ -157,12 +200,7 @@ def reset_ldap_account_password(cn, new_password, dn=None, parent_dn=LDAP_SERVIC
     """Reset an LDAP account password using docker exec.
     For the admin account, the DN is cn=admin,dc=hashicups,dc=local (not under ou=ServiceAccounts).
     """
-    if dn:
-        target_dn = dn
-    elif cn == "admin":
-        target_dn = LDAP_ADMIN_DN
-    else:
-        target_dn = service_account_dn(cn, parent_dn=parent_dn)
+    target_dn = _resolve_account_dn(cn, dn=dn, parent_dn=parent_dn)
 
     # Use ldappasswd as the current admin (which Vault controls after rotation)
     # We use docker exec with ldapmodify to reset the password internally
@@ -171,25 +209,16 @@ changetype: modify
 replace: userPassword
 userPassword: {new_password}
 """
-    subprocess.run(
-        ["docker", "exec", "-i", OPENLDAP_CONTAINER,
-         "ldapmodify", "-Y", "EXTERNAL", "-H", "ldapi:///"],
-        input=ldif_content,
-        check=True, capture_output=True, text=True,
-    )
+    _run_openldap_ldapi_command("ldapmodify", input=ldif_content, check=True)
 
 
 def recreate_service_account(cn, password, dn=None, parent_dn=LDAP_SERVICE_ACCOUNTS_DN):
     """Delete and recreate an LDAP service account using docker exec (SASL EXTERNAL)."""
-    dn = dn or service_account_dn(cn, parent_dn=parent_dn)
+    dn = _resolve_account_dn(cn, dn=dn, parent_dn=parent_dn)
 
     # Delete if exists (ignore errors)
     delete_ldif = f"dn: {dn}\nchangetype: delete\n"
-    subprocess.run(
-        ["docker", "exec", "-i", OPENLDAP_CONTAINER,
-         "ldapmodify", "-Y", "EXTERNAL", "-H", "ldapi:///"],
-        input=delete_ldif, capture_output=True, text=True,
-    )
+    _run_openldap_ldapi_command("ldapmodify", input=delete_ldif)
 
     # Create service account
     add_ldif = f"""dn: {dn}
@@ -199,11 +228,7 @@ cn: {cn}
 sn: {cn}
 userPassword: {password}
 """
-    result = subprocess.run(
-        ["docker", "exec", "-i", OPENLDAP_CONTAINER,
-         "ldapadd", "-Y", "EXTERNAL", "-H", "ldapi:///"],
-        input=add_ldif, capture_output=True, text=True,
-    )
+    result = _run_openldap_ldapi_command("ldapadd", input=add_ldif)
     if result.returncode != 0 and "Already exists" not in result.stderr:
         # If it already exists, reset the password instead
         if "already exists" in result.stderr.lower():

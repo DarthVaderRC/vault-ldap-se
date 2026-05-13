@@ -7,20 +7,15 @@ Covers:
 - Verifying generated passwords conform to the policy
 - Testing policy with static and dynamic credentials
 """
-import base64
-import os
+from contextlib import suppress
 import re
 import time
 
-import pytest
-
 from conftest import (
-    LDAP_SERVICE_ACCOUNTS_DN,
-    LDAP_URL,
     MOUNT_POINT,
-    PROJECT_DIR,
-    ldap_bind_check,
     recreate_service_account,
+    read_ldif_file,
+    service_account_dn,
 )
 
 
@@ -45,11 +40,13 @@ rule "charset" {
 """
 
 
-def read_ldif_file(filename):
-    path = os.path.join(PROJECT_DIR, "setup", "ldifs", filename)
-    with open(path) as f:
-        content = f.read()
-    return base64.b64encode(content.encode()).decode()
+def assert_password_matches_policy(password):
+    """Verify the demo password policy requirements."""
+    assert len(password) == 20, f"Password length {len(password)} should be 20"
+    assert re.search(r"[a-z]", password), "Should contain lowercase"
+    assert re.search(r"[A-Z]", password), "Should contain uppercase"
+    assert re.search(r"[0-9]", password), "Should contain digit"
+    assert re.search(r"[!@#$%^&*]", password), "Should contain special char"
 
 
 class TestPasswordPolicyCreation:
@@ -72,10 +69,8 @@ class TestPasswordPolicyCreation:
             f"{MOUNT_POINT}/config",
             password_policy="ldap-custom-policy",
         )
-
-        resp = vault_client.read(f"{MOUNT_POINT}/config")
-        # password_policy may not be directly visible in config read,
-        # but the effect is testable through credential generation
+        # password_policy may not be directly visible in config read;
+        # later tests verify the effect through generated credentials.
 
     def test_generate_password_with_policy(self, vault_client):
         """Generate a password and verify it meets the policy."""
@@ -87,14 +82,7 @@ class TestPasswordPolicyCreation:
         assert r.status_code == 200, f"Generate password failed: {r.text}"
         password = r.json()["data"]["password"]
 
-        # Verify length
-        assert len(password) == 20, f"Password length {len(password)} should be 20"
-
-        # Verify character classes
-        assert re.search(r"[a-z]", password), "Should contain lowercase"
-        assert re.search(r"[A-Z]", password), "Should contain uppercase"
-        assert re.search(r"[0-9]", password), "Should contain digit"
-        assert re.search(r"[!@#$%^&*]", password), "Should contain special char"
+        assert_password_matches_policy(password)
 
 
 class TestPasswordPolicyWithStaticRole:
@@ -105,15 +93,13 @@ class TestPasswordPolicyWithStaticRole:
         recreate_service_account("svc-account-1", "svcaccount1password")
 
         # Ensure any prior role is cleaned up
-        try:
+        with suppress(Exception):
             vault_client.delete(f"{MOUNT_POINT}/static-role/svc-account-1")
             time.sleep(1)
-        except Exception:
-            pass
 
         vault_client.write(
             f"{MOUNT_POINT}/static-role/svc-account-1-policy",
-            dn="cn=svc-account-1,ou=ServiceAccounts,dc=hashicups,dc=local",
+            dn=service_account_dn("svc-account-1"),
             username="svc-account-1",
             rotation_period="24h",
         )
@@ -123,12 +109,7 @@ class TestPasswordPolicyWithStaticRole:
         resp = vault_client.read(f"{MOUNT_POINT}/static-cred/svc-account-1-policy")
         password = resp["data"]["password"]
 
-        # Verify the password meets policy requirements
-        assert len(password) == 20, f"Password length {len(password)} should be 20"
-        assert re.search(r"[a-z]", password), "Should contain lowercase"
-        assert re.search(r"[A-Z]", password), "Should contain uppercase"
-        assert re.search(r"[0-9]", password), "Should contain digit"
-        assert re.search(r"[!@#$%^&*]", password), "Should contain special char"
+        assert_password_matches_policy(password)
 
         # Cleanup
         vault_client.delete(f"{MOUNT_POINT}/static-role/svc-account-1-policy")
@@ -153,12 +134,7 @@ class TestPasswordPolicyWithDynamicRole:
         resp = vault_client.read(f"{MOUNT_POINT}/creds/policy-test")
         password = resp["data"]["password"]
 
-        # Verify the password meets policy requirements
-        assert len(password) == 20, f"Password length {len(password)} should be 20"
-        assert re.search(r"[a-z]", password), "Should contain lowercase"
-        assert re.search(r"[A-Z]", password), "Should contain uppercase"
-        assert re.search(r"[0-9]", password), "Should contain digit"
-        assert re.search(r"[!@#$%^&*]", password), "Should contain special char"
+        assert_password_matches_policy(password)
 
         # Cleanup
         vault_client.sys.revoke_lease(resp["lease_id"])

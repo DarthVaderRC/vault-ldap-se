@@ -20,10 +20,29 @@ for arg in "$@"; do
     esac
 done
 
+container_exists() {
+    docker ps -a --format '{{.Names}}' | grep -q "^$1$"
+}
+
+container_ip() {
+    docker inspect "$1" --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
+}
+
+import_ldif() {
+    local ldif_name="$1"
+    local description="$2"
+    local target_path="/tmp/${ldif_name}"
+
+    echo ""
+    echo "=== ${description} ==="
+    docker cp "${SCRIPT_DIR}/ldifs/${ldif_name}" "${CONTAINER_NAME}:${target_path}"
+    docker exec "${CONTAINER_NAME}" ldapadd -cxD "cn=admin,dc=hashicups,dc=local" -w "${LDAP_ADMIN_PASSWORD}" -f "${target_path}"
+}
+
 echo "=== Setting up OpenLDAP container ==="
 
 # Stop existing container if running
-if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+if container_exists "${CONTAINER_NAME}"; then
     echo "Removing existing container ${CONTAINER_NAME}..."
     docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1
 fi
@@ -52,24 +71,13 @@ sleep 5
 docker ps -f name="${CONTAINER_NAME}" --format "table {{.Names}}\t{{.Status}}"
 
 # Get OpenLDAP container IP
-OPENLDAP_IP=$(docker inspect "${CONTAINER_NAME}" --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
+OPENLDAP_IP=$(container_ip "${CONTAINER_NAME}")
 echo "OpenLDAP container IP: ${OPENLDAP_IP}"
 
 # Add LDAP data using ldapadd inside the container
-echo ""
-echo "=== Populating OpenLDAP with base structure ==="
-docker cp "${SCRIPT_DIR}/ldifs/base.ldif" "${CONTAINER_NAME}:/tmp/base.ldif"
-docker exec "${CONTAINER_NAME}" ldapadd -cxD "cn=admin,dc=hashicups,dc=local" -w "${LDAP_ADMIN_PASSWORD}" -f /tmp/base.ldif
-
-echo ""
-echo "=== Adding seeded static accounts (svc-account-1, svc-account-2, ldapviewer) ==="
-docker cp "${SCRIPT_DIR}/ldifs/seed_entries.ldif" "${CONTAINER_NAME}:/tmp/seed_entries.ldif"
-docker exec "${CONTAINER_NAME}" ldapadd -cxD "cn=admin,dc=hashicups,dc=local" -w "${LDAP_ADMIN_PASSWORD}" -f /tmp/seed_entries.ldif
-
-echo ""
-echo "=== Adding library accounts ==="
-docker cp "${SCRIPT_DIR}/ldifs/library_accounts.ldif" "${CONTAINER_NAME}:/tmp/library_accounts.ldif"
-docker exec "${CONTAINER_NAME}" ldapadd -cxD "cn=admin,dc=hashicups,dc=local" -w "${LDAP_ADMIN_PASSWORD}" -f /tmp/library_accounts.ldif
+import_ldif "base.ldif" "Populating OpenLDAP with base structure"
+import_ldif "seed_entries.ldif" "Adding seeded static accounts (svc-account-1, svc-account-2, ldapviewer)"
+import_ldif "library_accounts.ldif" "Adding library accounts"
 
 echo ""
 echo "=== Verifying LDAP entries ==="

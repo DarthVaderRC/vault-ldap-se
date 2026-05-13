@@ -11,20 +11,22 @@ Covers:
 - Deleting static roles
 - skip_import_rotation behavior
 """
+from contextlib import suppress
 import time
-
-import pytest
 
 from conftest import (
     LDAP_ENGINEERING_SERVICE_ACCOUNTS_DN,
     LDAP_HOST_URL,
-    LDAP_SERVICE_ACCOUNTS_DN,
     MOUNT_POINT,
     ldap_bind_check,
     recreate_service_account,
     service_account_dn,
     wait_for_condition,
 )
+
+
+SVC_ACCOUNT_1_DN = service_account_dn("svc-account-1")
+SVC_ACCOUNT_2_DN = service_account_dn("svc-account-2")
 
 
 class TestStaticRoleCRUD:
@@ -36,7 +38,7 @@ class TestStaticRoleCRUD:
 
         vault_client.write(
             f"{MOUNT_POINT}/static-role/svc-account-1",
-            dn="cn=svc-account-1,ou=ServiceAccounts,dc=hashicups,dc=local",
+            dn=SVC_ACCOUNT_1_DN,
             username="svc-account-1",
             rotation_period="24h",
         )
@@ -45,7 +47,7 @@ class TestStaticRoleCRUD:
         assert resp is not None
         data = resp["data"]
         assert data["username"] == "svc-account-1"
-        assert data["dn"] == "cn=svc-account-1,ou=ServiceAccounts,dc=hashicups,dc=local"
+        assert data["dn"] == SVC_ACCOUNT_1_DN
 
     def test_read_static_credentials(self, vault_client):
         """Read credentials from the svc-account-1 static role."""
@@ -62,9 +64,8 @@ class TestStaticRoleCRUD:
         """Verify the Vault-managed password works for LDAP bind."""
         resp = vault_client.read(f"{MOUNT_POINT}/static-cred/svc-account-1")
         password = resp["data"]["password"]
-        dn = "cn=svc-account-1,ou=ServiceAccounts,dc=hashicups,dc=local"
 
-        assert ldap_bind_check(dn, password), \
+        assert ldap_bind_check(SVC_ACCOUNT_1_DN, password), \
             "Static credential should work for LDAP bind"
 
     def test_list_static_roles(self, vault_client):
@@ -80,7 +81,7 @@ class TestStaticRoleCRUD:
 
         vault_client.write(
             f"{MOUNT_POINT}/static-role/svc-account-2",
-            dn="cn=svc-account-2,ou=ServiceAccounts,dc=hashicups,dc=local",
+            dn=SVC_ACCOUNT_2_DN,
             username="svc-account-2",
             rotation_period="24h",
         )
@@ -119,9 +120,8 @@ class TestStaticRoleRotation:
         assert new_password != old_password, "Password should change after manual rotation"
 
         # Verify new password works
-        dn = "cn=svc-account-1,ou=ServiceAccounts,dc=hashicups,dc=local"
-        assert ldap_bind_check(dn, new_password), "New password should work"
-        assert not ldap_bind_check(dn, old_password), "Old password should not work"
+        assert ldap_bind_check(SVC_ACCOUNT_1_DN, new_password), "New password should work"
+        assert not ldap_bind_check(SVC_ACCOUNT_1_DN, old_password), "Old password should not work"
 
     def test_last_password_field(self, vault_client):
         """Verify last_password is tracked after rotation."""
@@ -137,7 +137,7 @@ class TestStaticRoleRotation:
         # Create role with very short rotation period
         vault_client.write(
             f"{MOUNT_POINT}/static-role/svc-account-2-autorotate",
-            dn="cn=svc-account-2,ou=ServiceAccounts,dc=hashicups,dc=local",
+            dn=SVC_ACCOUNT_2_DN,
             username="svc-account-2",
             rotation_period="10s",
         )
@@ -157,8 +157,7 @@ class TestStaticRoleRotation:
             "Password should auto-rotate after rotation_period"
 
         # Verify rotated password works
-        dn = "cn=svc-account-2,ou=ServiceAccounts,dc=hashicups,dc=local"
-        assert ldap_bind_check(dn, rotated_password), "Auto-rotated password should work"
+        assert ldap_bind_check(SVC_ACCOUNT_2_DN, rotated_password), "Auto-rotated password should work"
 
         # Cleanup
         vault_client.delete(f"{MOUNT_POINT}/static-role/svc-account-2-autorotate")
@@ -227,17 +226,16 @@ class TestSkipImportRotation:
 
         vault_client.write(
             f"{MOUNT_POINT}/static-role/svc-account-2-skip",
-            dn="cn=svc-account-2,ou=ServiceAccounts,dc=hashicups,dc=local",
+            dn=SVC_ACCOUNT_2_DN,
             username="svc-account-2",
             rotation_period="24h",
             skip_import_rotation=True,
         )
 
         time.sleep(2)
-
         # The original password should still work since rotation was skipped
-        dn = "cn=svc-account-2,ou=ServiceAccounts,dc=hashicups,dc=local"
-        assert ldap_bind_check(dn, known_password), \
+        # The original password should still work since rotation was skipped
+        assert ldap_bind_check(SVC_ACCOUNT_2_DN, known_password), \
             "Original password should still work with skip_import_rotation=True"
 
         # Cleanup
@@ -249,7 +247,5 @@ class TestStaticRoleCleanup:
 
     def test_cleanup_primary_static_role(self, vault_client):
         """Remove svc-account-1 static role to avoid username conflicts in later tests."""
-        try:
+        with suppress(Exception):
             vault_client.delete(f"{MOUNT_POINT}/static-role/svc-account-1")
-        except Exception:
-            pass

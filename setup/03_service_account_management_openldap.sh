@@ -30,11 +30,17 @@ changetype: delete
 EOF
 }
 
+demo_entry_dns=(
+    "${LDAP_SERVICE_ACCOUNT_DN}"
+    "${LDAP_VAULT_OU_DN}"
+    "${LDAP_BIND_DN}"
+    "${LDAP_DELEGATED_ADMIN_OU_DN}"
+)
+
 echo "Resetting known demo entries under ${LDAP_BRANCH_DN}..."
-delete_if_present "${LDAP_SERVICE_ACCOUNT_DN}"
-delete_if_present "${LDAP_VAULT_OU_DN}"
-delete_if_present "${LDAP_BIND_DN}"
-delete_if_present "${LDAP_DELEGATED_ADMIN_OU_DN}"
+for entry_dn in "${demo_entry_dns[@]}"; do
+    delete_if_present "${entry_dn}"
+done
 
 docker cp "${LDIF_PATH}" "${CONTAINER_NAME}:${LDIF_DEST}"
 set +e

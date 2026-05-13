@@ -10,29 +10,17 @@ Covers:
 - TTL behavior (default_ttl, max_ttl)
 - Listing dynamic roles
 """
-import base64
-import os
+from contextlib import suppress
 import time
 
 import pytest
 
 from conftest import (
-    LDAP_HOST_URL,
-    LDAP_SERVICE_ACCOUNTS_DN,
     MOUNT_POINT,
-    PROJECT_DIR,
     ldap_bind_check,
     ldap_entry_exists,
-    wait_for_condition,
+    read_ldif_file,
 )
-
-
-def read_ldif_file(filename):
-    """Read an LDIF file and return base64-encoded content."""
-    path = os.path.join(PROJECT_DIR, "setup", "ldifs", filename)
-    with open(path) as f:
-        content = f.read()
-    return base64.b64encode(content.encode()).decode()
 
 
 @pytest.fixture(scope="module")
@@ -51,10 +39,8 @@ def dynamic_role(vault_client, ensure_ldap_engine):
         max_ttl="24h",
     )
     yield "dynamic-dev"
-    try:
+    with suppress(Exception):
         vault_client.delete(f"{MOUNT_POINT}/role/dynamic-dev")
-    except Exception:
-        pass
 
 
 class TestDynamicRoleCRUD:

@@ -131,9 +131,53 @@ pause() {
     fi
 }
 
+get_container_ip() {
+    docker inspect "$1" --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
+}
+
+print_indented_file() {
+    local label="$1"
+    local path="$2"
+
+    echo -e "  ${DIM}${label}:${NC}"
+    sed 's/^/    /' "${path}"
+    echo ""
+}
+
+base64_file() {
+    base64 < "$1"
+}
+
+json_field() {
+    local json_input="$1"
+    local jq_filter="$2"
+
+    jq -r "${jq_filter}" <<<"${json_input}"
+}
+
+reset_ldap_password() {
+    local dn="$1"
+    local password="$2"
+
+    docker exec -i "${CONTAINER_NAME}" ldapmodify -Y EXTERNAL -H ldapi:/// >/dev/null 2>&1 <<EOF
+dn: ${dn}
+changetype: modify
+replace: userPassword
+userPassword: ${password}
+EOF
+}
+
 disable_ldap_mount() {
     vault lease revoke -force -prefix ldap >/dev/null 2>&1 || true
     vault secrets disable ldap/ >/dev/null 2>&1 || true
+}
+
+vault_delete_quietly() {
+    local path_name
+
+    for path_name in "$@"; do
+        vault delete "${path_name}" >/dev/null 2>&1
+    done
 }
 
 # Track demo results for summary
@@ -211,7 +255,7 @@ if [ "$SKIP_SETUP" = false ]; then
 
     run_cmd docker ps -f name="${CONTAINER_NAME}" --format '"table {{.Names}}\t{{.Status}}"'
 
-    OPENLDAP_IP=$(docker inspect "${CONTAINER_NAME}" --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
+    OPENLDAP_IP=$(get_container_ip "${CONTAINER_NAME}")
     info "OpenLDAP IP: ${OPENLDAP_IP}"
 
     subsection "Populating LDAP directory"
@@ -241,8 +285,7 @@ if [ "$SKIP_SETUP" = false ]; then
     track "Infrastructure Setup" "✅ PASS"
     pause
 else
-    VAULT_NETWORK=$(docker inspect vault-ent --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}' 2>/dev/null || echo "bridge")
-    OPENLDAP_IP=$(docker inspect "${CONTAINER_NAME}" --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
+    OPENLDAP_IP=$(get_container_ip "${CONTAINER_NAME}")
     info "Skipping setup. OpenLDAP IP: ${OPENLDAP_IP}"
 fi
 
@@ -375,17 +418,13 @@ info "Dynamic credentials create short-lived LDAP service accounts on demand usi
 echo ""
 
 subsection "View LDIF templates"
-echo -e "  ${DIM}Creation LDIF:${NC}"
-cat "${SCRIPT_DIR}/setup/ldifs/creation.ldif" | sed 's/^/    /'
-echo ""
-echo -e "  ${DIM}Deletion LDIF:${NC}"
-cat "${SCRIPT_DIR}/setup/ldifs/deletion.ldif" | sed 's/^/    /'
-echo ""
+print_indented_file "Creation LDIF" "${SCRIPT_DIR}/setup/ldifs/creation.ldif"
+print_indented_file "Deletion LDIF" "${SCRIPT_DIR}/setup/ldifs/deletion.ldif"
 
 subsection "Create a dynamic role"
-CREATION=$(base64 < "${SCRIPT_DIR}/setup/ldifs/creation.ldif")
-DELETION=$(base64 < "${SCRIPT_DIR}/setup/ldifs/deletion.ldif")
-ROLLBACK=$(base64 < "${SCRIPT_DIR}/setup/ldifs/rollback.ldif")
+CREATION=$(base64_file "${SCRIPT_DIR}/setup/ldifs/creation.ldif")
+DELETION=$(base64_file "${SCRIPT_DIR}/setup/ldifs/deletion.ldif")
+ROLLBACK=$(base64_file "${SCRIPT_DIR}/setup/ldifs/rollback.ldif")
 
 run_cmd vault write ldap/role/dynamic-dev \
     creation_ldif="${CREATION}" \
@@ -398,10 +437,10 @@ subsection "Generate dynamic credentials"
 run_cmd vault read ldap/creds/dynamic-dev
 
 DYN_DATA=$(vault read -format=json ldap/creds/dynamic-dev)
-DYN_USER=$(echo "${DYN_DATA}" | jq -r '.data.username')
-DYN_PWD=$(echo "${DYN_DATA}" | jq -r '.data.password')
-DYN_DN=$(echo "${DYN_DATA}" | jq -r '.data.distinguished_names[0]')
-LEASE_ID=$(echo "${DYN_DATA}" | jq -r '.lease_id')
+DYN_USER=$(json_field "${DYN_DATA}" '.data.username')
+DYN_PWD=$(json_field "${DYN_DATA}" '.data.password')
+DYN_DN=$(json_field "${DYN_DATA}" '.data.distinguished_names[0]')
+LEASE_ID=$(json_field "${DYN_DATA}" '.lease_id')
 
 info "Dynamic service account created: ${DYN_USER}"
 
@@ -432,14 +471,13 @@ run_cmd vault write ldap/role/custom-tpl \
     default_ttl='"1h"' max_ttl='"24h"'
 
 CUSTOM_DATA=$(vault read -format=json ldap/creds/custom-tpl)
-CUSTOM_USER=$(echo "${CUSTOM_DATA}" | jq -r '.data.username')
-CUSTOM_LEASE=$(echo "${CUSTOM_DATA}" | jq -r '.lease_id')
+CUSTOM_USER=$(json_field "${CUSTOM_DATA}" '.data.username')
+CUSTOM_LEASE=$(json_field "${CUSTOM_DATA}" '.lease_id')
 info "Custom template username: ${CUSTOM_USER}"
 success "Username follows custom template pattern!"
 
 vault lease revoke "${CUSTOM_LEASE}" >/dev/null 2>&1
-vault delete ldap/role/custom-tpl >/dev/null 2>&1
-vault delete ldap/role/dynamic-dev >/dev/null 2>&1
+vault_delete_quietly ldap/role/custom-tpl ldap/role/dynamic-dev
 sleep 2
 
 track "Dynamic Credentials (LDIF)" "✅ PASS"
@@ -468,8 +506,8 @@ info "Both accounts are available."
 
 subsection "Check out a service account"
 CHECKOUT_DATA=$(vault write -format=json ldap/library/svc-team/check-out ttl="30m")
-SVC_ACCOUNT=$(echo "${CHECKOUT_DATA}" | jq -r '.data.service_account_name')
-SVC_PWD=$(echo "${CHECKOUT_DATA}" | jq -r '.data.password')
+SVC_ACCOUNT=$(json_field "${CHECKOUT_DATA}" '.data.service_account_name')
+SVC_PWD=$(json_field "${CHECKOUT_DATA}" '.data.password')
 info "Checked out: ${SVC_ACCOUNT}"
 info "Password: ${SVC_PWD:0:20}..."
 
@@ -489,9 +527,9 @@ success "Account checked back in. Password will be rotated."
 
 subsection "Check out both accounts (exhaust pool)"
 CHECKOUT1=$(vault write -format=json ldap/library/svc-team/check-out ttl="30m")
-ACCT1=$(echo "${CHECKOUT1}" | jq -r '.data.service_account_name')
+ACCT1=$(json_field "${CHECKOUT1}" '.data.service_account_name')
 CHECKOUT2=$(vault write -format=json ldap/library/svc-team/check-out ttl="30m")
-ACCT2=$(echo "${CHECKOUT2}" | jq -r '.data.service_account_name')
+ACCT2=$(json_field "${CHECKOUT2}" '.data.service_account_name')
 info "Checked out: ${ACCT1} and ${ACCT2}"
 run_cmd vault read ldap/library/svc-team/status
 warn "All accounts unavailable — next check-out would fail."
@@ -502,7 +540,7 @@ run_cmd vault write ldap/library/manage/svc-team/check-in \
 success "Admin force-checked in both accounts."
 
 # Cleanup
-vault delete ldap/library/svc-team >/dev/null 2>&1
+vault_delete_quietly ldap/library/svc-team
 
 track "Library Set (CRUD)" "✅ PASS"
 track "Service Account Check-Out" "✅ PASS"
@@ -520,18 +558,8 @@ echo ""
 
 subsection "Create hierarchical static roles"
 # Recreate seeded static service accounts for fresh state
-docker exec -i "${CONTAINER_NAME}" ldapmodify -Y EXTERNAL -H ldapi:/// >/dev/null 2>&1 <<EOF
-dn: cn=svc-account-1,ou=ServiceAccounts,dc=hashicups,dc=local
-changetype: modify
-replace: userPassword
-userPassword: svcaccount1password
-EOF
-docker exec -i "${CONTAINER_NAME}" ldapmodify -Y EXTERNAL -H ldapi:/// >/dev/null 2>&1 <<EOF
-dn: cn=svc-account-2,ou=ServiceAccounts,dc=hashicups,dc=local
-changetype: modify
-replace: userPassword
-userPassword: svcaccount2password
-EOF
+reset_ldap_password "cn=svc-account-1,ou=ServiceAccounts,dc=hashicups,dc=local" "svcaccount1password"
+reset_ldap_password "cn=svc-account-2,ou=ServiceAccounts,dc=hashicups,dc=local" "svcaccount2password"
 
 run_cmd vault write ldap/static-role/org/dev \
     dn='"cn=svc-account-1,ou=ServiceAccounts,dc=hashicups,dc=local"' \
@@ -567,8 +595,7 @@ echo ""
 info "This would only grant access to org/platform/ roles."
 
 # Cleanup
-vault delete ldap/static-role/org/dev >/dev/null 2>&1
-vault delete ldap/static-role/org/platform/sre >/dev/null 2>&1
+vault_delete_quietly ldap/static-role/org/dev ldap/static-role/org/platform/sre
 
 track "Hierarchical Paths" "✅ PASS"
 pause
@@ -615,12 +642,7 @@ echo ""
 success "All passwords are 20 chars with lowercase, uppercase, digits, and special chars."
 
 subsection "Verify policy applies to static roles"
-docker exec -i "${CONTAINER_NAME}" ldapmodify -Y EXTERNAL -H ldapi:/// >/dev/null 2>&1 <<EOF
-dn: cn=svc-account-1,ou=ServiceAccounts,dc=hashicups,dc=local
-changetype: modify
-replace: userPassword
-userPassword: svcaccount1password
-EOF
+reset_ldap_password "cn=svc-account-1,ou=ServiceAccounts,dc=hashicups,dc=local" "svcaccount1password"
 
 vault write ldap/static-role/svc-account-1-policy \
     dn="cn=svc-account-1,ou=ServiceAccounts,dc=hashicups,dc=local" \
@@ -634,7 +656,7 @@ info "Length: ${#POLICY_PWD}"
 success "Password follows custom policy requirements!"
 
 # Cleanup
-vault delete ldap/static-role/svc-account-1-policy >/dev/null 2>&1
+vault_delete_quietly ldap/static-role/svc-account-1-policy
 vault write ldap/config password_policy="" >/dev/null 2>&1
 
 track "Custom Password Policies" "✅ PASS"
